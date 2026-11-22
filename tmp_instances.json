@@ -1,0 +1,175 @@
+﻿{
+  "data": [
+    {
+      "agent-config": {
+        "are-all-plugins-disabled": false,
+        "is-management-disabled": false,
+        "is-monitoring-disabled": false,
+        "plugins-config": null
+      },
+      "availability-config": {
+        "is-live-migration-preferred": null,
+        "recovery-action": "RESTORE_INSTANCE"
+      },
+      "availability-domain": "loen:eu-amsterdam-1-AD-1",
+      "capacity-reservation-id": null,
+      "cluster-placement-group-id": null,
+      "compartment-id": "ocid1.tenancy.oc1..aaaaaaaaox5mscm7qqypyboipcwpmxu57ffak3hjokmuonex5wf57q3bc7qq",
+      "dedicated-vm-host-id": null,
+      "defined-tags": {
+        "Oracle-Tags": {
+          "CreatedBy": "default/mayintake351@gmail.com",
+          "CreatedOn": "2026-11-22T14:58:52.761Z"
+        }
+      },
+      "display-name": "agentdock",
+      "extended-metadata": {},
+      "fault-domain": "FAULT-DOMAIN-3",
+      "freeform-tags": {},
+      "id": "ocid1.instance.oc1.eu-amsterdam-1.anqw2ljruulzmbacnn2vpz3w75ia76m7s3fwjyzn6szv5tuwi4tgxmuohmaq",
+      "image-id": "ocid1.image.oc1.eu-amsterdam-1.aaaaaaaautl7jrev66a22aft7qj7dutjcy7ojv5usu2vtrlse7hvq2shu3ra",
+      "instance-configuration-id": null,
+      "instance-options": {
+        "are-legacy-imds-endpoints-disabled": false
+      },
+      "ipxe-script": null,
+      "is-ai-enterprise-enabled": null,
+      "is-cross-numa-node": false,
+      "launch-mode": "PARAVIRTUALIZED",
+      "launch-options": {
+        "boot-volume-type": "PARAVIRTUALIZED",
+        "firmware": "UEFI_64",
+        "is-consistent-volume-naming-enabled": true,
+        "is-encryption-in-transit-enabled": null,
+        "is-pv-encryption-in-transit-enabled": false,
+        "network-type": "PARAVIRTUALIZED",
+        "remote-data-volume-type": "PARAVIRTUALIZED"
+      },
+      "licensing-configs": null,
+      "lifecycle-state": "RUNNING",
+      "metadata": {
+        "ssh_authorized_keys": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOGsiOnMEWnR4jYYm0jgMUrsvkKIDeMrwpXirghGusH/ niyomugabo steven@StevenNiyomugabo-Sunb2025\n",
+        "user_data": "I2Nsb3VkLWNvbmZpZwpwYWNrYWdlX3VwZGF0ZTogdHJ1ZQpwYWNrYWdlczoKICAtIGRvY2tlci5pbwogIC0gZG9ja2VyLWNvbXBvc2UtcGx1Z2luCiAgLSBnaXQKICAtIGN1cmwKd3JpdGVfZmlsZXM6CiAgLSBwYXRoOiAvZXRjL2FnZW50ZG9jay5lbnYKICAgIHBlcm1pc3Npb25zOiAnMDYwMCcKICAgIGNvbnRlbnQ6IHwKICAgICAgQUdFTlRET0NLX0VOVj1wcm9kdWN0aW9uCiAgICAgIEFHRU5URE9DS19TRUNSRVRfS0VZPUJ5aEhBQVlJc2xIRUFGMThUWFBabDF2RVBFUjBmQXg5b0IwYWpObHdZaFUKICAgICAgQUdFTlRET0NLX0FETUlOX0VNQUlMPWFkbWluQGFnZW50ZG9jay5sb2NhbAogICAgICBBR0VOVERPQ0tfQURNSU5fUEFTU1dPUkQ9QlczX3VveldnYjZwekJhdWxrM09YckdECiAgICAgIEFHRU5URE9DS19EQVRBQkFTRV9VUkw9cG9zdGdyZXNxbCtwc3ljb3BnOi8vYWdlbnRkb2NrOjd0QUNudjdxc1JRbzFfT0JQT05DazBwS2dBQnhnaUlFQGRiOjU0MzIvYWdlbnRkb2NrCiAgICAgIEFHRU5URE9DS19GUk9OVEVORF9PUklHSU5TPWh0dHA6Ly9sb2NhbGhvc3Q6ODAwMAogICAgICBBR0VOVERPQ0tfUFVCTElDX1VSTD1odHRwOi8vbG9jYWxob3N0OjgwMDAKICAgICAgQUdFTlRET0NLX1NFU1NJT05fU0VDVVJFX0NPT0tJRT1GYWxzZQogICAgICBBR0VOVERPQ0tfU0VFRF9MSUJSQVJZPXRydWUKICAgICAgQUdFTlRET0NLX0dJVEhVQl9UT0tFTj1naG9fN0M3SUZNUjBDNHpNOEY2YzJPazU5OWtOZ1d1azFUMnpiVkpICiAgICAgIEFHRU5URE9DS19HSVRIVUJfV0VCSE9PS19TRUNSRVQ9CiAgICAgIEFHRU5URE9DS19GSVJTVF9QQVJUWV9PV05FUlM9U1RFVk9IQ09ERVIKICAgICAgQUdFTlRET0NLX1NNVFBfSE9TVD0KICAgICAgQUdFTlRET0NLX1NNVFBfUE9SVD0KICAgICAgQUdFTlRET0NLX1NNVFBfVVNFUj0KICAgICAgQUdFTlRET0NLX1NNVFBfUEFTU1dPUkQ9CiAgICAgIEFHRU5URE9DS19TTVRQX0ZST009CiAgICAgIEFHRU5URE9DS19QQVlNRU5UX1BST1ZJREVSPW1hbnVhbAogICAgICBBR0VOVERPQ0tfUEFERExFX0FQSV9LRVk9CiAgICAgIEFHRU5URE9DS19QQURETEVfV0VCSE9PS19TRUNSRVQ9CiAgICAgIEFHRU5URE9DS19GTFVUVEVSV0FWRV9TRUNSRVRfS0VZPQogICAgICBBR0VOVERPQ0tfRkxVVFRFUldBVkVfV0VCSE9PS19IQVNIPQogICAgICBBR0VOVERPQ0tfVVJVQlVUT1BBWV9BUElfS0VZPQogICAgICBBR0VOVERPQ0tfVVJVQlVUT1BBWV9XRUJIT09LX1NFQ1JFVD0KICAgICAgQUdFTlRET0NLX1VSVUJVVE9QQVlfQ0hFQ0tPVVRfVVJMPQogICAgICBQT1NUR1JFU19QQVNTV09SRD03dEFDbnY3cXNSUW8xX09CUE9OQ2swcEtnQUJ4Z2lJRQogICAgICBSRURJU19QQVNTV09SRD02VUhRSmthWWpPNVYyd2dEVU5kM2p1NkZSaF94Tll3QgpydW5jbWQ6CiAgLSBzeXN0ZW1jdGwgZW5hYmxlIC0tbm93IGRvY2tlcgogIC0gZ2l0IGNsb25lIGh0dHBzOi8vZ2l0aHViLmNvbS9TVEVWT0hDT0RFUi9hZ2VudGRvY2suZ2l0IC9vcHQvYWdlbnRkb2NrCiAgLSBjcCAvZXRjL2FnZW50ZG9jay5lbnYgL29wdC9hZ2VudGRvY2svLmVudgogIC0gY2hvd24gcm9vdDpyb290IC9vcHQvYWdlbnRkb2NrLy5lbnYgJiYgY2htb2QgNjAwIC9vcHQvYWdlbnRkb2NrLy5lbnYKICAtIGNkIC9vcHQvYWdlbnRkb2NrCiAgLSBzZWQgLWkgJ3MvMTI3LjAuMC4xOjgwMDA6ODAwMC8wLjAuMC4wOjgwMDA6ODAwMC8nIGRvY2tlci1jb21wb3NlLnltbAogIC0gZG9ja2VyIGNvbXBvc2UgdXAgLWQgLS1idWlsZA=="
+      },
+      "placement-constraint-details": null,
+      "platform-config": null,
+      "preemptible-instance-config": null,
+      "region": "eu-amsterdam-1",
+      "security-attributes": {},
+      "security-attributes-state": "STABLE",
+      "shape": "VM.Standard.E5.Flex",
+      "shape-config": {
+        "baseline-ocpu-utilization": null,
+        "gpu-description": null,
+        "gpus": 0,
+        "local-disk-description": null,
+        "local-disks": 0,
+        "local-disks-total-size-in-gbs": null,
+        "local-volume-size-in-gbs": null,
+        "max-vnic-attachments": 2,
+        "memory-in-gbs": 8.0,
+        "networking-bandwidth-in-gbps": 2.0,
+        "ocpus": 2.0,
+        "processor-description": "2.3 GHz AMD EPYCÖ 9J14 (Genoa)",
+        "resource-management": null,
+        "vcpus": 4
+      },
+      "source-details": {
+        "boot-volume-size-in-gbs": null,
+        "boot-volume-vpus-per-gb": null,
+        "image-id": "ocid1.image.oc1.eu-amsterdam-1.aaaaaaaautl7jrev66a22aft7qj7dutjcy7ojv5usu2vtrlse7hvq2shu3ra",
+        "instance-source-image-filter-details": null,
+        "kms-key-id": null,
+        "source-type": "image"
+      },
+      "system-tags": {},
+      "time-created": "2026-11-22T14:58:53.186000+00:00",
+      "time-maintenance-reboot-due": null
+    },
+    {
+      "agent-config": {
+        "are-all-plugins-disabled": false,
+        "is-management-disabled": false,
+        "is-monitoring-disabled": false,
+        "plugins-config": null
+      },
+      "availability-config": {
+        "is-live-migration-preferred": null,
+        "recovery-action": "RESTORE_INSTANCE"
+      },
+      "availability-domain": "loen:eu-amsterdam-1-AD-1",
+      "capacity-reservation-id": null,
+      "cluster-placement-group-id": null,
+      "compartment-id": "ocid1.tenancy.oc1..aaaaaaaaox5mscm7qqypyboipcwpmxu57ffak3hjokmuonex5wf57q3bc7qq",
+      "dedicated-vm-host-id": null,
+      "defined-tags": {
+        "Oracle-Tags": {
+          "CreatedBy": "default/mayintake351@gmail.com",
+          "CreatedOn": "2026-11-21T19:03:01.245Z"
+        }
+      },
+      "display-name": "vowela-app",
+      "extended-metadata": {},
+      "fault-domain": "FAULT-DOMAIN-1",
+      "freeform-tags": {},
+      "id": "ocid1.instance.oc1.eu-amsterdam-1.anqw2ljruulzmbacv7md7avs6q7pqvlg2vhssnkc45fegqigcnzny3ktldfq",
+      "image-id": "ocid1.image.oc1.eu-amsterdam-1.aaaaaaaayj4zqdbebaozgntzsa3rjx3mnmuxfyqzdqdl6tjo5dybyozndema",
+      "instance-configuration-id": null,
+      "instance-options": {
+        "are-legacy-imds-endpoints-disabled": false
+      },
+      "ipxe-script": null,
+      "is-ai-enterprise-enabled": null,
+      "is-cross-numa-node": false,
+      "launch-mode": "PARAVIRTUALIZED",
+      "launch-options": {
+        "boot-volume-type": "PARAVIRTUALIZED",
+        "firmware": "UEFI_64",
+        "is-consistent-volume-naming-enabled": true,
+        "is-encryption-in-transit-enabled": null,
+        "is-pv-encryption-in-transit-enabled": false,
+        "network-type": "PARAVIRTUALIZED",
+        "remote-data-volume-type": "PARAVIRTUALIZED"
+      },
+      "licensing-configs": null,
+      "lifecycle-state": "RUNNING",
+      "metadata": {
+        "ssh_authorized_keys": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILXz0RQYxSzHv2z3ZAYUYPfjLwjmq5VzAXR4HJjShujb vowela-oci-deploy\n"
+      },
+      "placement-constraint-details": null,
+      "platform-config": null,
+      "preemptible-instance-config": null,
+      "region": "eu-amsterdam-1",
+      "security-attributes": {},
+      "security-attributes-state": "STABLE",
+      "shape": "VM.Standard.A1.Flex",
+      "shape-config": {
+        "baseline-ocpu-utilization": null,
+        "gpu-description": null,
+        "gpus": 0,
+        "local-disk-description": null,
+        "local-disks": 0,
+        "local-disks-total-size-in-gbs": null,
+        "local-volume-size-in-gbs": null,
+        "max-vnic-attachments": 2,
+        "memory-in-gbs": 12.0,
+        "networking-bandwidth-in-gbps": 2.0,
+        "ocpus": 2.0,
+        "processor-description": "3.0 GHz Ampere« AltraÖ",
+        "resource-management": null,
+        "vcpus": 2
+      },
+      "source-details": {
+        "boot-volume-size-in-gbs": null,
+        "boot-volume-vpus-per-gb": null,
+        "image-id": "ocid1.image.oc1.eu-amsterdam-1.aaaaaaaayj4zqdbebaozgntzsa3rjx3mnmuxfyqzdqdl6tjo5dybyozndema",
+        "instance-source-image-filter-details": null,
+        "kms-key-id": null,
+        "source-type": "image"
+      },
+      "system-tags": {},
+      "time-created": "2026-11-21T19:03:01.608000+00:00",
+      "time-maintenance-reboot-due": null
+    }
+  ]
+}

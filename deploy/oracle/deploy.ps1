@@ -5,10 +5,12 @@ param(
   [Parameter(Mandatory = $true)][string]$ImageId,
   [Parameter(Mandatory = $true)][string]$RepositoryUrl,
   [Parameter(Mandatory = $true)][string]$SshAuthorizedKeysFile,
+  [string]$AvailabilityDomain = 'loen:eu-amsterdam-1-AD-1',
   [string]$DisplayName = 'agentdock',
-  [string]$Shape = 'VM.Standard.E4.Flex',
+  [string]$Shape = 'VM.Standard.E5.Flex',
   [double]$Ocpus = 2,
   [double]$MemoryGb = 8,
+  [bool]$SecureCookie = $false,
   [switch]$Apply,
   [switch]$AssignPublicIp
 )
@@ -40,7 +42,7 @@ write_files:
       AGENTDOCK_DATABASE_URL=postgresql+psycopg://agentdock:$env:POSTGRES_PASSWORD@db:5432/agentdock
       AGENTDOCK_FRONTEND_ORIGINS=$env:AGENTDOCK_FRONTEND_ORIGINS
       AGENTDOCK_PUBLIC_URL=$env:AGENTDOCK_PUBLIC_URL
-      AGENTDOCK_SESSION_SECURE_COOKIE=true
+      AGENTDOCK_SESSION_SECURE_COOKIE=$SecureCookie
       AGENTDOCK_SEED_LIBRARY=true
       AGENTDOCK_GITHUB_TOKEN=$env:AGENTDOCK_GITHUB_TOKEN
       AGENTDOCK_GITHUB_WEBHOOK_SECRET=$env:AGENTDOCK_GITHUB_WEBHOOK_SECRET
@@ -65,7 +67,9 @@ runcmd:
   - git clone $RepositoryUrl /opt/agentdock
   - cp /etc/agentdock.env /opt/agentdock/.env
   - chown root:root /opt/agentdock/.env && chmod 600 /opt/agentdock/.env
-  - cd /opt/agentdock && docker compose up -d --build
+  - cd /opt/agentdock
+  - sed -i 's/127.0.0.1:8000:8000/0.0.0.0:8000:8000/' docker-compose.yml
+  - docker compose up -d --build
 "@
 
 $cloudInitFile = Join-Path $env:TEMP 'agentdock-cloud-init.yaml'
@@ -73,18 +77,21 @@ $cloudInitFile = Join-Path $env:TEMP 'agentdock-cloud-init.yaml'
 
 $arguments = @(
   'compute', 'instance', 'launch',
+  '--availability-domain', $AvailabilityDomain,
   '--compartment-id', $CompartmentId,
   '--subnet-id', $SubnetId,
   '--image-id', $ImageId,
   '--display-name', $DisplayName,
   '--shape', $Shape,
   '--ssh-authorized-keys-file', $SshAuthorizedKeysFile,
-  '--userdata-file', $cloudInitFile,
+  '--user-data-file', $cloudInitFile,
   '--query', 'data.{id:id,display_name:display_name}',
   '--output', 'json'
 )
 if ($Shape -like '*.Flex') {
-  $arguments += @('--shape-config', "{`"Ocpus`":$Ocpus,`"MemoryInGBs`":$MemoryGb}")
+  $shapeFile = Join-Path $env:TEMP 'agentdock-shape.json'
+  [System.IO.File]::WriteAllText($shapeFile, "{`"Ocpus`":$Ocpus,`"MemoryInGBs`":$MemoryGb}", [System.Text.UTF8Encoding]::new($false))
+  $arguments += @('--shape-config', "file://$shapeFile")
 }
 if ($AssignPublicIp) { $arguments += @('--assign-public-ip', 'true') }
 

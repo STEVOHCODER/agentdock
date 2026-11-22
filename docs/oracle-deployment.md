@@ -4,6 +4,8 @@ The OCI CLI is installed on this machine (`C:\oci-cli\Scripts\oci.exe`, version 
 
 ## Verified locally
 
+Environment discovered on this machine: region `eu-amsterdam-1`, availability domain `loen:eu-amsterdam-1-AD-1`, a public subnet `10.0.0.0/24`, and Canonical Ubuntu 24.04 images. `VM.Standard.E4.Flex` returned **Out of host capacity**; `VM.Standard.E5.Flex` launched successfully. The helper defaults to E5 Flex now.
+
 ```powershell
 .\deploy\oracle\preflight.ps1 -Profile DEFAULT
 ```
