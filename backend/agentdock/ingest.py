@@ -126,6 +126,10 @@ def _read_skill_files(client: GitHubClient, owner: str, repo: str, branch: str, 
                 raise HTTPException(status_code=413, detail=f"Skill package exceeds {settings.max_skill_bytes} bytes")
             files[relative] = data
     if "SKILL.md" not in files:
+        instruction_keys = [key for key in files if key.split("/")[-1].lower() == "skill.md"]
+        if instruction_keys:
+            files["SKILL.md"] = files.pop(instruction_keys[0])
+    if "SKILL.md" not in files:
         raise HTTPException(status_code=422, detail="The selected folder does not contain SKILL.md")
     return files
 
@@ -273,8 +277,18 @@ def import_repository(db: Session, url: str, skill_path: str | None = None, cate
             entries = _selected_paths_tree(client, owner, name, branch, [skill_path] if skill_path is not None else requested_paths, settings)
         else:
             entries = tree_response.get("tree", [])
-        discovered_paths = sorted({item["path"][:-len("/SKILL.md")] for item in entries
-                                   if item.get("type") == "blob" and item.get("mode") != "120000" and item.get("path", "").endswith("/SKILL.md")})
+        discovered_paths = set()
+        for item in entries:
+            path = item.get("path", "")
+            if item.get("type") != "blob" or item.get("mode") == "120000":
+                continue
+            if path in {"SKILL.md", "skill.md"}:
+                discovered_paths.add("")
+            elif path.endswith("/SKILL.md"):
+                discovered_paths.add(path[:-len("/SKILL.md")])
+            elif path.endswith("/skill.md"):
+                discovered_paths.add(path[:-len("/skill.md")])
+        discovered_paths = sorted(discovered_paths)
         if any(item.get("path") == "SKILL.md" and item.get("type") == "blob" for item in entries):
             discovered_paths.insert(0, "")
         if skill_path is not None:
