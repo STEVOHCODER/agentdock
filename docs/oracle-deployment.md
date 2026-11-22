@@ -12,6 +12,22 @@ Environment discovered on this machine: region `eu-amsterdam-1`, availability do
 
 This reports the CLI version, namespace and available compartments. Set `OCI_COMPARTMENT_ID` to also list compute shapes in that compartment.
 
+## Deployed status
+
+| Item | Value |
+|---|---|
+| Public URL | http://92.5.229.27:8000 |
+| Region | eu-amsterdam-1 |
+| Availability domain | loen:eu-amsterdam-1-AD-1 |
+| Shape | VM.Standard.E5.Flex (2 OCPU, 8 GB) |
+| Image | Canonical Ubuntu 24.04, OCID `ocid1.image.oc1.eu-amsterdam-1.aaaaaaaautl7jrev66a22aft7qj7dutjcy7ojv5usu2vtrlse7hvq2shu3ra` |
+| Repo | https://github.com/STEVOHCODER/agentdock |
+| Health | `GET http://92.5.229.27:8000/api/health` returns 200 |
+| Skills | 43 approved; imported set includes the 26 `igura-marketplace/.agents/skills/*` skills and the root `master-ui-engine/SKILL.md` |
+| Payments | Manual invoice is the active provider; Paddle/Flutterwave/UrubutoPay are visible but awaiting credentials |
+
+The deployed administrator email is `admin@agentdock.ai`. The password is stored in `.env.production` on this machine; it was generated with `python tmp_secrets2.py` output and is also the startup bootstrap password. If you need a fresh one, run that script again and update the admin user's email/password in Oracle SQL.
+
 ## Inputs you still need
 
 The deployment helper requires these values. They are not stored in the repository:
