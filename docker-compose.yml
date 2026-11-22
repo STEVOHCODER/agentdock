@@ -1,0 +1,131 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: agentdock
+      POSTGRES_USER: agentdock
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentdock -d agentdock"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment: &runtime-env
+      AGENTDOCK_ENV: production
+      AGENTDOCK_DATABASE_URL: postgresql+psycopg://agentdock:${POSTGRES_PASSWORD}@db:5432/agentdock
+      AGENTDOCK_STORAGE_PATH: /app/data/skillvault
+      AGENTDOCK_PUBLIC_URL: ${AGENTDOCK_PUBLIC_URL:-https://agentdock.example}
+      AGENTDOCK_GITHUB_TOKEN: ${AGENTDOCK_GITHUB_TOKEN:-}
+      AGENTDOCK_GITHUB_WEBHOOK_SECRET: ${AGENTDOCK_GITHUB_WEBHOOK_SECRET:-}
+      AGENTDOCK_FIRST_PARTY_OWNERS: ${AGENTDOCK_FIRST_PARTY_OWNERS:-}
+      AGENTDOCK_SMTP_HOST: ${AGENTDOCK_SMTP_HOST:-}
+      AGENTDOCK_SMTP_PORT: ${AGENTDOCK_SMTP_PORT:-587}
+      AGENTDOCK_SMTP_USER: ${AGENTDOCK_SMTP_USER:-}
+      AGENTDOCK_SMTP_PASSWORD: ${AGENTDOCK_SMTP_PASSWORD:-}
+      AGENTDOCK_SMTP_FROM: ${AGENTDOCK_SMTP_FROM:-AgentDock <no-reply@agentdock.local>}
+      AGENTDOCK_SMTP_STARTTLS: ${AGENTDOCK_SMTP_STARTTLS:-true}
+      AGENTDOCK_REQUIRE_EMAIL_VERIFICATION: ${AGENTDOCK_REQUIRE_EMAIL_VERIFICATION:-false}
+      AGENTDOCK_PAYMENT_PROVIDER: ${AGENTDOCK_PAYMENT_PROVIDER:-manual}
+      AGENTDOCK_PAYMENT_CURRENCY: ${AGENTDOCK_PAYMENT_CURRENCY:-USD}
+      AGENTDOCK_MANUAL_BILLING_EMAIL: ${AGENTDOCK_MANUAL_BILLING_EMAIL:-billing@agentdock.local}
+      AGENTDOCK_PLATFORM_COMMISSION_BPS: ${AGENTDOCK_PLATFORM_COMMISSION_BPS:-1500}
+      AGENTDOCK_PADDLE_API_KEY: ${AGENTDOCK_PADDLE_API_KEY:-}
+      AGENTDOCK_PADDLE_WEBHOOK_SECRET: ${AGENTDOCK_PADDLE_WEBHOOK_SECRET:-}
+      AGENTDOCK_PADDLE_ENVIRONMENT: ${AGENTDOCK_PADDLE_ENVIRONMENT:-sandbox}
+      AGENTDOCK_FLUTTERWAVE_SECRET_KEY: ${AGENTDOCK_FLUTTERWAVE_SECRET_KEY:-}
+      AGENTDOCK_FLUTTERWAVE_WEBHOOK_HASH: ${AGENTDOCK_FLUTTERWAVE_WEBHOOK_HASH:-}
+      AGENTDOCK_URUBUTOPAY_API_KEY: ${AGENTDOCK_URUBUTOPAY_API_KEY:-}
+      AGENTDOCK_URUBUTOPAY_WEBHOOK_SECRET: ${AGENTDOCK_URUBUTOPAY_WEBHOOK_SECRET:-}
+      AGENTDOCK_URUBUTOPAY_CHECKOUT_URL: ${AGENTDOCK_URUBUTOPAY_CHECKOUT_URL:-}
+      AGENTDOCK_DISCOVERY_ENABLED: ${AGENTDOCK_DISCOVERY_ENABLED:-true}
+      AGENTDOCK_DISCOVERY_INTERVAL_HOURS: ${AGENTDOCK_DISCOVERY_INTERVAL_HOURS:-24}
+      AGENTDOCK_DISCOVERY_TOPICS: ${AGENTDOCK_DISCOVERY_TOPICS:-agent-skills,claude-skills,ai-agent-skills,codex-skills}
+      AGENTDOCK_DISCOVERY_KEYWORDS: ${AGENTDOCK_DISCOVERY_KEYWORDS:-agent skills,SKILL.md}
+      AGENTDOCK_DISCOVERY_MIN_STARS: ${AGENTDOCK_DISCOVERY_MIN_STARS:-100}
+      AGENTDOCK_DISCOVERY_PER_PAGE: ${AGENTDOCK_DISCOVERY_PER_PAGE:-30}
+      AGENTDOCK_SEED_LIBRARY: ${AGENTDOCK_SEED_LIBRARY:-true}
+      AGENTDOCK_S3_BUCKET: ${AGENTDOCK_S3_BUCKET:-}
+      AGENTDOCK_S3_REGION: ${AGENTDOCK_S3_REGION:-us-east-1}
+      AGENTDOCK_S3_ENDPOINT_URL: ${AGENTDOCK_S3_ENDPOINT_URL:-}
+      AGENTDOCK_S3_ACCESS_KEY_ID: ${AGENTDOCK_S3_ACCESS_KEY_ID:-}
+      AGENTDOCK_S3_SECRET_ACCESS_KEY: ${AGENTDOCK_S3_SECRET_ACCESS_KEY:-}
+      AGENTDOCK_S3_PREFIX: ${AGENTDOCK_S3_PREFIX:-agentdock}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build: .
+    command: ["sh", "-c", "uvicorn backend.agentdock.main:app --host 0.0.0.0 --port 8000"]
+    environment:
+      <<: *runtime-env
+      AGENTDOCK_SECRET_KEY: ${AGENTDOCK_SECRET_KEY:?Set AGENTDOCK_SECRET_KEY in .env}
+      AGENTDOCK_ADMIN_EMAIL: ${AGENTDOCK_ADMIN_EMAIL:?Set AGENTDOCK_ADMIN_EMAIL in .env}
+      AGENTDOCK_ADMIN_PASSWORD: ${AGENTDOCK_ADMIN_PASSWORD:?Set AGENTDOCK_ADMIN_PASSWORD in .env}
+      AGENTDOCK_SESSION_SECURE_COOKIE: "true"
+      AGENTDOCK_FRONTEND_ORIGINS: ${AGENTDOCK_FRONTEND_ORIGINS:?Set your HTTPS origin in .env}
+      AGENTDOCK_TRUSTED_PROXIES: ${AGENTDOCK_TRUSTED_PROXIES:-}
+      AGENTDOCK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      AGENTDOCK_DATABASE_POOL_SIZE: ${AGENTDOCK_DATABASE_POOL_SIZE:-8}
+      AGENTDOCK_DATABASE_MAX_OVERFLOW: ${AGENTDOCK_DATABASE_MAX_OVERFLOW:-12}
+      AGENTDOCK_DATABASE_POOL_TIMEOUT_SECONDS: ${AGENTDOCK_DATABASE_POOL_TIMEOUT_SECONDS:-30}
+      AGENTDOCK_REQUEST_RATE_LIMIT_PER_MINUTE: ${AGENTDOCK_REQUEST_RATE_LIMIT_PER_MINUTE:-300}
+      AGENTDOCK_AUTH_RATE_LIMIT_PER_MINUTE: ${AGENTDOCK_AUTH_RATE_LIMIT_PER_MINUTE:-12}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - skillvault-data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "-m", "backend.agentdock.worker"]
+    environment:
+      <<: *runtime-env
+      AGENTDOCK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      AGENTDOCK_SECRET_KEY: ${AGENTDOCK_SECRET_KEY:?Set AGENTDOCK_SECRET_KEY in .env}
+    volumes:
+      - skillvault-data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  skillvault-data:
