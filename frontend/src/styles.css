@@ -471,3 +471,52 @@ code, pre { font-family: var(--mono); }
   .hero-title { font-size: 38px; }
   .table-wrap { border: 0; background: transparent; }
 }
+
+/* ================= Marketplace V2 ================= */
+.market-v2 { max-width: 1300px; margin: 0 auto; padding: 0 32px; }
+.market-hero { position: relative; padding: 72px 32px; border-radius: 24px; border: 1px solid rgba(139,92,246,.35); background: radial-gradient(1200px circle at 15% -20%, rgba(139,92,246,.35), transparent 65%), radial-gradient(900px circle at 90% 15%, rgba(34,211,238,.20), transparent 60%), #0a0e1d; box-shadow: 0 24px 70px rgba(0,0,0,.35); overflow: hidden; }
+.market-hero::before { content:""; position:absolute; inset:0; background:linear-gradient(to right, rgba(0,0,0,.65), transparent 70%); }
+.market-hero-inner { position:relative; z-index:2; display:flex; flex-direction:column; gap:8px; max-width:860px; }
+.market-hero-overline { margin-bottom:14px; }
+.market-hero-title { font-size:clamp(34px,4.8vw,54px); font-weight:850; letter-spacing:-.045em; line-height:1.05; }
+.market-hero-title .accent { background:linear-gradient(90deg,#c4b5fd,#22d3ee); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.market-hero-sub { margin-top:12px; max-width:680px; color:var(--muted); font-size:15px; line-height:1.7; }
+.market-hero-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+.market-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:16px 20px; margin-bottom:24px; border:1px solid var(--line); border-radius:16px; background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015)); }
+.market-toolbar .search { flex:1.5; min-width:220px; }
+.market-toolbar .select { flex:0 0 auto; min-width:150px; }
+.market-filters { display:flex; flex-wrap:wrap; align-items:center; gap:24px; padding-top:16px; border-top:1px solid var(--line); margin-top:16px; }
+.filter-group { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.filter-group select { min-width:130px; }
+.market-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+.market-card { position:relative; overflow:hidden; background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03)); border:1px solid rgba(139,92,246,.18); border-radius:18px; padding:18px; display:flex; flex-direction:column; gap:12px; transition:transform .22s,box-shadow .22s,border-color .22s; }
+.market-card:hover { transform:translateY(-3px); border-color:rgba(34,211,238,.42); box-shadow:0 20px 60px rgba(0,0,0,.4),0 0 40px rgba(139,92,246,.14); }
+.market-card::after { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent); opacity:0; transition:opacity .22s; }
+.market-card:hover::after { opacity:1; }
+.market-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.market-card-head h3 { font-size:16px; font-weight:770; letter-spacing:-.02em; line-height:1.2; }
+.market-card-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 8px; border-radius:8px; font-size:10px; font-weight:750; letter-spacing:.04em; text-transform:uppercase; background:linear-gradient(135deg,rgba(139,92,246,.25),rgba(34,211,238,.12)); color:#d5c8fd; border:1px solid rgba(139,92,246,.35); white-space:nowrap; }
+.market-card-body { flex:1; }
+.market-card-summary { margin:8px 0 0; color:var(--muted); font-size:12.5px; line-height:1.65; }
+.market-card-meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; color:var(--dim); font-size:11px; }
+.market-card-meta > span { display:inline-flex; align-items:center; gap:5px; }
+.market-card-meta .dot { display:inline-block; width:5px; height:5px; border-radius:50%; background:rgba(148,163,184,.4); }
+.market-card-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; }
+.market-card-price { font-size:20px; font-weight:800; letter-spacing:-.04em; }
+.market-card-price .small { margin-left:6px; color:var(--dim); font-size:11px; font-weight:600; letter-spacing:0; }
+.market-card-price.free { color:var(--green); }
+.market-card-cta { min-height:34px; border-radius:10px; white-space:nowrap; }
+.market-section { margin-top:36px; }
+.market-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.market-section-head h2 { font-size:18px; font-weight:800; letter-spacing:-.02em; }
+.market-section-head .link { color:#a78bfa; font-size:12.5px; font-weight:700; text-decoration:underline; }
+.market-empty-v2 { border:1px dashed rgba(148,163,184,.25); border-radius:18px; background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.02)); padding:56px; display:flex; flex-direction:column; align-items:center; gap:10px; color:var(--muted); }
+.market-empty-v2 svg { width:36px; height:36px; stroke-width:1.5; }
+.market-empty-v2 h3 { color:var(--text); font-size:18px; font-weight:700; }
+.market-empty-v2 p { max-width:400px; font-size:13.5px; line-height:1.6; }
+.market-featured-strip { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
+.market-featured-item { display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:8px; background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(34,211,238,.10)); border:1px solid rgba(139,92,246,.25); color:#d5c8fd; font-size:11px; font-weight:650; }
+.market-chip { display:inline-flex; align-items:center; padding:4px 8px; border-radius:6px; background:rgba(255,255,255,.06); border:1px solid var(--line); color:var(--muted); font-size:10.5px; margin:0 0 4px; }
+@media (max-width:1100px) { .market-v2 { padding:0 18px; } .market-hero { padding:52px 22px; } }
+@media (max-width:900px) { .market-grid { grid-template-columns:1fr; } .market-card { padding:16px; } }
+@media (max-width:640px) { .market-hero { padding:36px 18px; } .market-hero-title { font-size:32px; } .market-hero-actions { flex-direction:column; align-items:stretch; } .market-toolbar { flex-direction:column; align-items:stretch; } .market-card-footer { align-items:flex-start; } }

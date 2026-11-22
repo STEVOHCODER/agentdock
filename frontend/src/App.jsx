@@ -285,7 +285,7 @@ function PublicShell({ user, route, plans, onSelectSkill, onSelectListing, notif
       </header>
 
       {page === 'home' && <Landing user={user} plans={plans} navigate={go} onSelectSkill={onSelectSkill} onSelectListing={onSelectListing} notify={notify} />}
-      {page === 'marketplace' && <MarketplacePage user={user} navigate={go} onSelect={onSelectListing} notify={notify} />}
+      {page === 'marketplace' && <MarketplaceV2 user={user} navigate={go} onSelect={onSelectListing} notify={notify} />}
       {page === 'pricing' && <PricingPage user={user} navigate={go} plans={plans} notify={notify} />}
       {page === 'docs' && <DocsPage navigate={go} />}
       {page === 'developers' && <DevelopersPage navigate={go} />}
@@ -886,7 +886,7 @@ function AppShell({ user, route, plans, adminTab, setAdminTab, isAdmin, mobileOp
     if (page === '/explore') return <Explore user={user} query={route.query.q || ''} navigate={navigate} onSelect={onSelectSkill} notify={notify} />
     if (page === '/library') return <LibraryPage user={user} navigate={navigate} notify={notify} />
     if (page === '/vault') return <VaultPage navigate={navigate} onSelect={onSelectSkill} />
-    if (page === '/marketplace') return <MarketplacePage user={user} navigate={navigate} onSelect={onSelectListing} notify={notify} embedded />
+    if (page === '/marketplace') return <MarketplaceV2 user={user} navigate={navigate} onSelect={onSelectListing} notify={notify} />
     if (page === '/purchases') return <PurchasesPage navigate={navigate} onSelect={onSelectSkill} />
     if (page === '/creator') return <CreatorPage user={user} navigate={navigate} notify={notify} />
     if (page === '/teams') return <TeamsPage user={user} route={route} navigate={navigate} notify={notify} />
@@ -2555,5 +2555,124 @@ function AdminAudit() {
         </tbody>
       </table>
     </div>
+  )
+}
+
+function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState('featured')
+  const [featuredOnly, setFeaturedOnly] = useState(false)
+  const [category, setCategory] = useState('')
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const featured = useLoad(() => get('/api/v1/marketplace/featured'), [])
+
+  const load = () => {
+    setLoading(true); setError(null)
+    const params = new URLSearchParams({ limit: '50' })
+    if (query.trim()) params.set('q', query.trim().slice(0, 120))
+    if (featuredOnly) params.set('featured', 'true')
+    if (category) params.set('category', category)
+    get(`/api/v1/marketplace/listings?${params}`)
+      .then((data) => setItems(data.items || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [sort, featuredOnly, category])
+  useEffect(() => { const timer = setTimeout(load, 240); return () => clearTimeout(timer) }, [query])
+
+  const cards = featuredOnly ? (featured.data?.items || []) : items.slice()
+  cards.sort((a, b) => {
+    if (sort === 'price_low') return a.price_cents - b.price_cents
+    if (sort === 'price_high') return b.price_cents - a.price_cents
+    if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    return (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+  const categories = useMemo(() => [...new Set(items.map((item) => item.skill?.category).filter(Boolean))], [items])
+
+  return (
+    <div className="market-v2">
+      <section className="market-hero">
+        <div className="market-hero-inner">
+          <span className="market-hero-overline">Marketplace � Real skill licences, premium entitlements, reviews</span>
+          <h1 className="market-hero-title">Skill lines that fit.<br />Build faster with the same tooling the best agents use.<br />Marketplace made by you, reviewed by us.
+          </h1>
+          <div className="market-hero-actions">
+            <button className="btn btn-primary btn-lg" onClick={() => navigate(user ? '/creator' : '/register')}><Star size={16} fill="#fff" /> Publish a skill</button>
+            <button className="btn btn-outline btn-lg" onClick={() => navigate('/docs')}>How it works</button>
+          </div>
+        </div>
+      </section>
+
+      <div className="market-toolbar">
+        <div className="topbar-search search">
+          <Search size={15} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search skills, creators and listings" />
+        </div>
+        <Toggle value={sort} onChange={setSort} options={[
+          { value: 'featured', label: 'Featured' },
+          { value: 'newest', label: 'Newest' },
+          { value: 'price_low', label: 'Lowest first' },
+          { value: 'price_high', label: 'Highest first' },
+        ]} />
+        <div className="market-filters">
+          <label className="filter-group"><input type="checkbox" checked={featuredOnly} onChange={(event) => setFeaturedOnly(event.target.checked)} /> Featured only</label>
+          <select className="select" value={category} onChange={(event) => setCategory(event.target.value)} disabled={categories.length === 0}>
+            <option value="">{categories.length ? 'Filter by category' : 'No categories yet'}</option>
+            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+          <span className="count-note">{cards.length} listings</span>
+        </div>
+      </div>
+
+      <div className="market-section">
+        <div className="market-section-head"><h2>Featured in the marketplace</h2><button className="link" onClick={() => navigate('/marketplace')}>Explore everything</button></div>
+        {featured.loading ? <Loading /> : (
+          <div className="market-grid">
+            {(featured.data?.items || []).slice(0, 4).map((item) => (
+              <MarketCard key={item.id} item={item} onSelect={onSelect} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="market-section">
+        <div className="market-section-head"><h2>All listings</h2><span className="count-note">{cards.length}</span></div>
+        {loading ? <Loading /> : error ? <div className="banner">{error}</div> : (
+          <div className="market-grid">
+            {cards.map((item) => <MarketCard key={item.id} item={item} onSelect={onSelect} />)}
+            {cards.length === 0 && <div className="market-empty-v2"><Package size={28} /><h3>No marketplace listings yet</h3><p>Skills are added after creator review, licence review and security review. Check back or publish your own.</p><button className="btn btn-primary btn-sm" onClick={() => navigate(user ? '/creator' : '/register')}>Publish a skill</button></div>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MarketCard({ item, onSelect }) {
+  const price = item.price_cents > 0 ? money(item.price_cents, item.currency) : 'Free'
+  return (
+    <article className="market-card" onClick={() => onSelect?.(item)}>
+      <div className="market-card-head">
+        <h3 className="line-clamp-2">{item.title}</h3>
+        <span className="market-card-badge"><Check size={12} /> {item.featured ? 'Featured' : price === 'Free' ? 'Free' : 'Premium'}</span>
+      </div>
+      <p className="market-card-summary">{item.summary || `${item.skill?.category || 'Listed skill'} skill with ${item.skill?.security_status === 'clear' ? 'clear security scan' : 'security review pending'}.`}</p>
+      <div className="market-card-meta">
+        <span><Star size={11} fill="#fbbf24" color="#fbbf24" /> {item.rating > 0 ? item.rating.toFixed(1) : 'Not rated yet'} ({item.review_count})</span>
+        <span className="dot" />
+        <span>{item.creator}</span>
+        <span className="dot" />
+        <span>{item.skill?.license}</span>
+        {item.skill?.category && <><span className="dot" /><span>{item.skill.category}</span></>}
+      </div>
+      <div className="market-card-footer">
+        <span className={`market-card-price ${price === 'Free' ? 'free' : ''}`}>
+          {price}<span className="small">{price !== 'Free' ? '/licence' : ''}</span>
+        </span>
+        <button className="btn btn-outline btn-sm">View details</button>
+      </div>
+    </article>
   )
 }
