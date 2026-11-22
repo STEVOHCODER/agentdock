@@ -58,10 +58,12 @@ function SkillTags({ skill }) {
 }
 
 function SkillCard({ skill, onSelect, onSave, saved }) {
+  const stars = skill.stars || 0
   return (
     <article className="skill-card" onClick={() => onSelect?.(skill)}>
       <div className="skill-top">
         <span className="skill-name">{skill.name}</span>
+        {stars > 0 && <Pill tone="amber">{stars}★</Pill>}
         {skill.rating > 0 && <span className="chip" title={`${skill.rating} from ${skill.review_count} reviews`}><Star size={11} fill="currentColor" /> {skill.rating.toFixed(1)}</span>}
       </div>
       <p className="skill-desc">{skill.description}</p>
@@ -979,6 +981,29 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
         <div className="metric-card"><div className="metric-label"><Zap size={14} /> Skills retrieved</div><div className="metric-value">{usage.data?.skills_retrieved ?? '—'}</div><div className="metric-note">{usage.data?.by_source?.mcp ? `${usage.data.by_source.mcp} via MCP` : 'across all surfaces'}</div></div>
         <div className="metric-card"><div className="metric-label"><Library size={14} /> Saved skills</div><div className="metric-value">{library.data?.items?.length ?? '—'}</div><div className="metric-note">in your library</div></div>
         <div className="metric-card"><div className="metric-label"><Users size={14} /> Teams</div><div className="metric-value">{entitlements.data?.teams?.length ?? 0}</div><div className="metric-note">{entitlements.data?.teams?.length ? 'shared workspaces' : 'invite your team'}</div></div>
+      </div>
+
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <div className="panel-head">
+          <div><div className="panel-title">Successful first run</div><div className="panel-sub">Search, discover, connect and retrieve — everything is approved and retrievable by gateway.</div></div>
+        </div>
+        <div className="status-grid">
+          <div className="status-item"><CheckCircle2 size={15} /><div><b>Search works</b><span>{usage.data?.skills_retrieved ?? 0} skills retrieved so far</span></div></div>
+          <div className="status-item"><CheckCircle2 size={15} /><div><b>Discovery is active</b><span>{recommended.length} recommended skills shown above</span></div></div>
+          <div className="status-item"><CheckCircle2 size={15} /><div><b>Use via API</b><span>Connect an agent or use the CLI</span></div></div>
+          <div className="status-item"><CheckCircle2 size={15} /><div><b>Retrieve and save</b><span>Skills are approved and have versioned snapshots</span></div></div>
+        </div>
+        <div className="activity" style={{ marginTop: 12 }}>
+          {(usage.data?.items || []).slice(0, 5).map((item, index) => (
+            <div className="activity-row" key={index}>
+              <span className="activity-icon"><Zap size={14} /></span>
+              <div><b>{item.event}</b><span>{item.skill_id || 'account event'}</span></div>
+              <Pill tone="cyan">{item.source}</Pill>
+              <time>{relativeLabel(item.created_at)}</time>
+            </div>
+          ))}
+          {(!usage.data?.items || usage.data.items.length === 0) && <p className="muted small">Retrieve or save your first skill to build history here.</p>}
+        </div>
       </div>
 
       <div className="grid-2">
@@ -2652,6 +2677,7 @@ function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
 
 function MarketCard({ item, onSelect }) {
   const price = item.price_cents > 0 ? money(item.price_cents, item.currency) : 'Free'
+  const stars = item.skill?.stars || 0
   return (
     <article className="market-card" onClick={() => onSelect?.(item)}>
       <div className="market-card-head">
@@ -2660,7 +2686,7 @@ function MarketCard({ item, onSelect }) {
       </div>
       <p className="market-card-summary">{item.summary || `${item.skill?.category || 'Listed skill'} skill with ${item.skill?.security_status === 'clear' ? 'clear security scan' : 'security review pending'}.`}</p>
       <div className="market-card-meta">
-        <span><Star size={11} fill="#fbbf24" color="#fbbf24" /> {item.rating > 0 ? item.rating.toFixed(1) : 'Not rated yet'} ({item.review_count})</span>
+        <span><Star size={11} fill="#fbbf24" color="#fbbf24" /> {stars} stars · {item.rating > 0 ? item.rating.toFixed(1) : 'Not rated'}</span>
         <span className="dot" />
         <span>{item.creator}</span>
         <span className="dot" />
