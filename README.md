@@ -63,6 +63,18 @@ Requirements: Python 3.11+, Node.js 20.19+ (or 22.12+) and npm.
     python -m backend.agentdock.worker
     ```
 
+## Subscription plans
+
+| Plan | Monthly | Annual | Seats |
+|---|---:|---:|---:|
+| Free | $0 | — | 1 |
+| Developer | $3 | $30 | 1 |
+| Duo | $5 | $50 | 2 |
+| Small Team | $8 | $80 | 4 |
+| Growth Team | $10 | $100 | 7 |
+
+The default payment provider is manual invoicing: a customer receives an invoice reference and an administrator records the payment in the control center before entitlements are granted. Paddle, Flutterwave and UrubutoPay adapters are present but inactive until their credentials and webhooks are configured.
+
 ## API and MCP
 
 - Health: `GET /api/health`
