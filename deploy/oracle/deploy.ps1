@@ -25,10 +25,11 @@ foreach ($name in 'AGENTDOCK_SECRET_KEY','POSTGRES_PASSWORD','REDIS_PASSWORD','A
 
 $cloudInit = @"
 #cloud-config
+ssh_authorized_keys:
+  - $((Get-Content $SshAuthorizedKeysFile -Raw).Trim())
 package_update: true
 packages:
   - docker.io
-  - docker-compose-plugin
   - git
   - curl
 write_files:
@@ -64,12 +65,14 @@ write_files:
       REDIS_PASSWORD=$env:REDIS_PASSWORD
 runcmd:
   - systemctl enable --now docker
+  - curl -fsSL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
   - git clone $RepositoryUrl /opt/agentdock
   - cp /etc/agentdock.env /opt/agentdock/.env
   - chown root:root /opt/agentdock/.env && chmod 600 /opt/agentdock/.env
   - cd /opt/agentdock
   - sed -i 's/127.0.0.1:8000:8000/0.0.0.0:8000:8000/' docker-compose.yml
-  - docker compose up -d --build
+  - docker-compose up -d --build
 "@
 
 $cloudInitFile = Join-Path $env:TEMP 'agentdock-cloud-init.yaml'

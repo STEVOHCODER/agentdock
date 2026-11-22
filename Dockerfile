@@ -1,7 +1,7 @@
 FROM node:24-alpine AS frontend
 WORKDIR /build
 COPY package*.json ./
-RUN npm ci
+RUN npm install --no-audit --no-fund
 COPY vite.config.js ./
 COPY frontend ./frontend
 RUN npm run build
