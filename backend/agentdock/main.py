@@ -490,6 +490,7 @@ def search_skills(request: Request, q: str = "", category: str | None = None, co
         db.add(UsageEvent(user_id=user.id, event="search_executed",
                           source="mcp" if request.headers.get("authorization", "").startswith("Bearer") else "api",
                           details={"query": q[:120]}))
+        db.commit()
     return {"items": [enrich_skill(db, skill, repo) for skill, repo in rows], "total": total,
             "limit": limit, "offset": offset}
 
@@ -500,6 +501,7 @@ def discover_skills(request: Request, db: Session = Depends(db_session)):
     if user:
         db.add(UsageEvent(user_id=user.id, event="discovery_executed",
                           source="mcp" if request.headers.get("authorization", "").startswith("Bearer") else "api"))
+        db.commit()
     approved = Skill.status == "approved"
     def top_skills(*ordering):
         rows = db.execute(select(Skill, Repository).outerjoin(Repository, Skill.repository_id == Repository.id)
@@ -977,6 +979,7 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
     user = current_user(request, db)
     name = params.get("name")
     db.add(UsageEvent(user_id=user.id, event="mcp_executed", source="mcp", details={"tool": name or ""}))
+    db.commit()
     args = params.get("arguments") or {}
     required_scope = {
         "search_skills": "skills:read", "get_skill": "skills:read",
