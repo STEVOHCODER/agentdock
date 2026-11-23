@@ -88,7 +88,7 @@ The default payment provider is manual invoicing: a customer receives an invoice
 - Webhooks: `POST /api/v1/webhooks/payments/{paddle|flutterwave|urubutopay}`, `POST /api/v1/webhooks/github`
 - MCP: `POST /mcp` with `Authorization: Bearer <API key>`
 
-Create an API key in Integrations or use `POST /api/v1/auth/token`. The key is returned once. MCP tools include `search_skills`, `get_skill`, `get_skill_resource`, `list_skill_versions`, `browse_marketplace`, `list_my_purchases`, `check_subscription`, `get_usage`, `list_teams`, and collection helpers.
+Create an API key in Integrations or use `POST /api/v1/auth/token`. The key is returned once. MCP tools include `search_skills`, `get_skill`, `get_skill_resource`, `list_skill_versions`, `browse_marketplace`, `list_my_purchases`, `check_subscription`, `get_usage`, `list_teams`, collection helpers, and the complete package/execution tools (`resolve_skill_package`, `list_skill_files`, `retrieve_skill_file`, `execute_skill_script`, `get_execution_status`, `retrieve_execution_result`, `cancel_execution`). See [docs/skill-execution-bridge.md](docs/skill-execution-bridge.md) for the isolated execution design and live verification.
 
 ## CLI
 
