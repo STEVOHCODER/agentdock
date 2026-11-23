@@ -1714,13 +1714,13 @@ function UsagePage({ navigate, onSelect }) {
 /* ------------------------------------------------------------------ */
 
 function IntegrationsPage({ user, navigate, notify }) {
-  const integrations = useLoad(() => get('/api/v1/integrations'), [])
-  const keys = useLoad(() => get('/api/v1/auth/api-keys'), [refreshKeys])
   const [name, setName] = useState('Agent MCP')
   const [scopes, setScopes] = useState(['skills:read', 'library:read', 'account:read'])
   const [created, setCreated] = useState('')
   const [refreshKeys, setRefreshKeys] = useState(0)
   const [busy, setBusy] = useState(false)
+  const integrations = useLoad(() => get('/api/v1/integrations'), [])
+  const keys = useLoad(() => get('/api/v1/auth/api-keys'), [refreshKeys])
 
   const createKey = async (event) => {
     event.preventDefault(); setBusy(true)
