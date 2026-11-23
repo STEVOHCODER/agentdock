@@ -752,17 +752,19 @@ def create_execution(payload: ExecutionInput, request: Request, db: Session = De
     except execution_routes.ExecutionError as error:
         raise HTTPException(status_code=403, detail=str(error))
     manifest_paths = {entry["path"] for entry in package["manifest"]}
-    if not payload.arguments or payload.arguments[0] not in manifest_paths:
+    script = execution_routes.normalize_package_path(package, payload.arguments[0] if payload.arguments else "")
+    if not script or script not in manifest_paths:
         raise HTTPException(status_code=422, detail="arguments[0] must be a script path from the approved package")
+    arguments = [script, *payload.arguments[1:]]
     job = ExecutionJob(
         user_id=user.id, team_id=payload.team_id, skill_id=package["skill"].id,
         version=package["version"].version, version_hash=package["version"].content_hash,
-        command=payload.command, arguments=payload.arguments, status="queued",
+        command=payload.command, arguments=arguments, status="queued",
     )
     db.add(job)
     record_usage(db, user, None, "execution.requested", source="api",
                  details={"skill_id": package["skill"].id, "version": package["version"].version,
-                          "script": payload.arguments[0]})
+                          "script": script})
     db.commit()
     return _execution_job_data(job)
 
@@ -1294,7 +1296,8 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
             package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
         except execution_routes.ExecutionError as error:
             raise HTTPException(status_code=403, detail=str(error))
-        path = execution_routes.safe_relative_path(str(args.get("path", "")))
+        path = execution_routes.normalize_package_path(
+            package, execution_routes.safe_relative_path(str(args.get("path", ""))))
         try:
             content = read_resource(package["version"].snapshot_path, path)
         except (ValueError, FileNotFoundError):
@@ -1309,7 +1312,7 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
             package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
         except execution_routes.ExecutionError as error:
             raise HTTPException(status_code=403, detail=str(error))
-        script = str(args.get("script", ""))
+        script = execution_routes.normalize_package_path(package, str(args.get("script", "")))
         manifest_paths = {entry["path"] for entry in package["manifest"]}
         if not script or script not in manifest_paths:
             raise HTTPException(status_code=422, detail="script must be a file from the approved package")

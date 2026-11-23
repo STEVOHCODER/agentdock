@@ -88,6 +88,13 @@ def resolve_package(db: Session, identifier: str, version: str | None = None) ->
     }
 
 
+def normalize_package_path(package: dict, path: str) -> str:
+    prefix = package["workspace_path"].rstrip("/") + "/"
+    if path.startswith(prefix):
+        return path[len(prefix):]
+    return path
+
+
 def verify_snapshot(snapshot_path: str, manifest: list[dict]) -> int:
     verified = 0
     for entry in manifest:
@@ -296,6 +303,8 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
             if progress:
                 progress(f"materialized {files} files")
             argv = [job.command, *job.arguments]
+            if len(argv) > 1:
+                argv[1] = package["workspace_path"].rstrip("/") + "/" + normalize_package_path(package, argv[1])
             if settings.execution_driver == "docker":
                 result = _run_in_docker(job, db, workspace, argv, timeout, memory_bytes)
                 result["files_verified"] = files
