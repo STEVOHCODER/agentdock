@@ -58,6 +58,26 @@ function eventDetail(item) {
   return item.skill_id || 'gateway event'
 }
 
+function tokenizeArgs(value) {
+  const result = []
+  let current = ''
+  let quote = null
+  for (const char of value || '') {
+    if (quote) {
+      if (char === quote) quote = null
+      else current += char
+    } else if (char === '"' || char === "'") {
+      quote = char
+    } else if (/\s/.test(char)) {
+      if (current) { result.push(current); current = '' }
+    } else {
+      current += char
+    }
+  }
+  if (current) result.push(current)
+  return result
+}
+
 function Pill({ children, tone }) {
   return <span className={`badge ${tone ? `badge-${tone}` : ''}`}>{children}</span>
 }
@@ -881,6 +901,7 @@ const NAV = [
     { path: '/explore', label: 'Explore skills', icon: Search },
     { path: '/library', label: 'Library', icon: Library },
     { path: '/vault', label: 'Version vault', icon: Database },
+    { path: '/exec', label: 'Execution console', icon: Terminal },
   ] },
   { group: 'Commerce', items: [
     { path: '/marketplace', label: 'Marketplace', icon: Package },
@@ -919,6 +940,7 @@ function AppShell({ user, route, plans, adminTab, setAdminTab, isAdmin, mobileOp
     if (page === '/explore') return <Explore user={user} query={route.query.q || ''} navigate={navigate} onSelect={onSelectSkill} notify={notify} />
     if (page === '/library') return <LibraryPage user={user} navigate={navigate} notify={notify} />
     if (page === '/vault') return <VaultPage navigate={navigate} onSelect={onSelectSkill} />
+    if (page === '/exec') return <ExecutionConsole navigate={navigate} notify={notify} />
     if (page === '/marketplace') return <MarketplaceV2 user={user} navigate={navigate} onSelect={onSelectListing} notify={notify} />
     if (page === '/purchases') return <PurchasesPage navigate={navigate} onSelect={onSelectSkill} />
     if (page === '/creator') return <CreatorPage user={user} navigate={navigate} notify={notify} />
@@ -1710,6 +1732,159 @@ function UsagePage({ navigate, onSelect }) {
           ))}
           {(!usage.data?.items || usage.data.items.length === 0) && <p className="muted small">No retrieval activity yet.</p>}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ExecutionConsole({ navigate, notify }) {
+  const skills = useLoad(() => get('/api/v1/skills/search?limit=50'), [])
+  const [skill, setSkill] = useState('')
+  const [packageData, setPackageData] = useState(null)
+  const [script, setScript] = useState('')
+  const [args, setArgs] = useState('')
+  const [job, setJob] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [loadingPackage, setLoadingPackage] = useState(false)
+  const [fileFilter, setFileFilter] = useState('')
+
+  const loadPackage = async (slug) => {
+    setSkill(slug); setPackageData(null); setScript(''); setJob(null); setFileFilter('')
+    if (!slug) return
+    setLoadingPackage(true)
+    try {
+      const data = await get(`/api/v1/skills/${encodeURIComponent(slug)}/package`)
+      setPackageData(data)
+      if (data.groups?.scripts?.length) setScript(data.groups.scripts[0])
+      else if (data.groups?.entrypoints?.length) setScript(data.groups.entrypoints[0])
+    } catch (error) { notify('error', 'Could not load package', error.message) }
+    finally { setLoadingPackage(false) }
+  }
+
+  const run = async (event) => {
+    event.preventDefault()
+    if (!skill || !script) return
+    setBusy(true); setJob(null)
+    try {
+      const created = await post('/api/v1/executions', {
+        skill, arguments: [script, ...tokenizeArgs(args)],
+      })
+      setJob(created)
+      notify('success', 'Execution queued', created.id)
+    } catch (error) { notify('error', 'Could not start execution', error.message) }
+    finally { setBusy(false) }
+  }
+
+  const cancel = async () => {
+    if (!job) return
+    try {
+      const updated = await post(`/api/v1/executions/${job.id}/cancel`, {})
+      setJob(updated)
+      notify('success', 'Execution canceled', job.id)
+    } catch (error) { notify('error', 'Could not cancel', error.message) }
+  }
+
+  useEffect(() => {
+    if (!job || ['succeeded', 'failed', 'canceled'].includes(job.status)) return undefined
+    const timer = window.setInterval(async () => {
+      try { setJob(await get(`/api/v1/executions/${job.id}`)) } catch { /* keep last state */ }
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [job?.id, job?.status])
+
+  const coverage = packageData?.statistics_bundle_coverage || {}
+  const files = (packageData?.manifest || []).filter((item) =>
+    !fileFilter || item.path.toLowerCase().includes(fileFilter.toLowerCase()))
+  const downloadUrl = skill ? `/api/v1/skills/${encodeURIComponent(skill)}/package.zip` : '#'
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <div className="section-eyebrow">Execution console</div>
+          <h1>Run skill packages safely</h1>
+          <p>Read the complete immutable package, then run its scripts in a temporary, network-isolated container.</p>
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div className="panel panel-pad">
+          <div className="panel-head"><div><div className="panel-title">1. Choose an approved skill</div><div className="panel-sub">Every file is pinned to the exact SkillVault version.</div></div></div>
+          <label className="field"><span className="label">Skill</span>
+            <select className="select" value={skill} onChange={(event) => loadPackage(event.target.value)} disabled={skills.loading}>
+              <option value="">{skills.loading ? 'Loading skills…' : 'Select a skill'}</option>
+              {(skills.data?.items || []).map((item) => (
+                <option key={item.id} value={item.slug}>{item.name} — {item.category || 'General'}</option>
+              ))}
+            </select>
+          </label>
+          {loadingPackage ? <Loading /> : packageData && (
+            <div style={{ marginTop: 14 }}>
+              <div className="status-grid">
+                <div className="status-item"><Package size={15} /><div><b>{packageData.manifest.length}</b><span>files</span></div></div>
+                <div className="status-item"><Code2 size={15} /><div><b>{coverage.scripts || 0}</b><span>scripts</span></div></div>
+                <div className="status-item"><Database size={15} /><div><b>{coverage.datasets || 0}</b><span>datasets</span></div></div>
+                <div className="status-item"><ShieldCheck size={15} /><div><b>{packageData.version}</b><span>immutable version</span></div></div>
+              </div>
+              <p className="muted small" style={{ marginTop: 12 }}>
+                Version hash <code>{packageData.version_hash?.slice(0, 18)}…</code> · Workspace <code>{packageData.workspace_path}</code>
+              </p>
+              <a className="btn btn-outline btn-sm" href={downloadUrl} style={{ marginTop: 10 }}><Download size={14} /> Download full package ZIP</a>
+            </div>
+          )}
+        </div>
+
+        <div className="panel panel-pad">
+          <div className="panel-head"><div><div className="panel-title">2. Run a script</div><div className="panel-sub">Python only. No network. Automatic cleanup.</div></div></div>
+          <form onSubmit={run}>
+            <label className="field"><span className="label">Script</span>
+              <select className="select" value={script} onChange={(event) => setScript(event.target.value)} disabled={!packageData}>
+                <option value="">{packageData ? 'Select a script' : 'Load a skill first'}</option>
+                {(packageData?.groups?.scripts || []).map((path) => <option key={path} value={path}>{path}</option>)}
+              </select>
+            </label>
+            <label className="field" style={{ marginTop: 10 }}><span className="label">Arguments (quotes supported)</span>
+              <input className="input" value={args} onChange={(event) => setArgs(event.target.value)}
+                placeholder={'SaaS technology landing page --design-system'} disabled={!packageData} />
+            </label>
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button className="btn btn-primary" disabled={busy || !script}>{busy ? 'Starting…' : 'Run in sandbox'}</button>
+              {job && !['succeeded', 'failed', 'canceled'].includes(job.status) && (
+                <button type="button" className="btn btn-danger" onClick={cancel}>Cancel</button>
+              )}
+            </div>
+          </form>
+          {job && (
+            <div style={{ marginTop: 16 }}>
+              <div className="status-item"><Activity size={15} /><div><b>{job.status}</b><span>{job.id} · exit {job.exit_code ?? '—'}</span></div></div>
+              {job.stdout && <pre className="code-block console-output">{job.stdout}</pre>}
+              {job.stderr && <pre className="code-block console-output">{job.stderr}</pre>}
+              {job.error && <div className="banner" style={{ marginTop: 10 }}>{job.error}</div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <div className="panel-head">
+          <div><div className="panel-title">3. Read every file without running anything</div><div className="panel-sub">Open a file directly or download the verified package.</div></div>
+          <input className="input" style={{ maxWidth: 260 }} value={fileFilter} onChange={(event) => setFileFilter(event.target.value)} placeholder="Filter files" />
+        </div>
+        {!packageData ? <p className="muted small">Select a skill to browse its complete package.</p> : (
+          <div className="activity">
+            {files.map((item) => {
+              const url = `/api/v1/skills/${encodeURIComponent(skill)}/resources/${item.path.split('/').map(encodeURIComponent).join('/')}`
+              return (
+                <div className="activity-row" key={item.path}>
+                  <span className="activity-icon"><FileText size={14} /></span>
+                  <div><b>{item.path}</b><span>{item.bytes} bytes · {item.sha256.slice(0, 12)}…</span></div>
+                  <a className="btn btn-ghost btn-sm" href={url} target="_blank" rel="noreferrer">Open</a>
+                </div>
+              )
+            })}
+            {files.length === 0 && <p className="muted small">No files match “{fileFilter}”.</p>}
+          </div>
+        )}
       </div>
     </div>
   )

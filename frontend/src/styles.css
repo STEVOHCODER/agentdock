@@ -425,6 +425,7 @@ code, pre { font-family: var(--mono); }
 .legal p, .legal li { color: var(--muted); font-size: 14px; line-height: 1.8; }
 .legal code { padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.06); color: #c7d2fe; font-size: 12px; }
 .code-block { margin: 14px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: rgba(4, 6, 14, 0.8); color: #c7d2fe; font: 500 12px/1.7 var(--mono); overflow-x: auto; white-space: pre; }
+.console-output { max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .copy-row { display: flex; align-items: center; gap: 8px; }
 .copy-row .code-block { flex: 1; margin: 0; }
 .status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }

@@ -18,6 +18,24 @@ from .vault import make_version, save_snapshot, slugify
 SKILL_CONTAINER_DIRS = {".agents", ".claude", ".cursor", ".devin", ".github", ".well-known"}
 
 
+def synchronized_skill_status(skill: Skill, evaluation, repository: Repository) -> str:
+    """Decide the status of a skill imported during repository synchronization.
+
+    Security findings and licence problems always win. Auto-approval only
+    applies to new/qualified skills from an already approved repository.
+    """
+    if evaluation.security_status != "clear":
+        return "quarantined"
+    if not evaluation.license_allowed:
+        return "pending_review"
+    if skill.status in {"approved", "withdrawn"}:
+        return skill.status
+    settings = get_settings()
+    if settings.auto_approve_synced_skills and repository.status == "approved" and evaluation.status in {"qualified", "approved"}:
+        return "approved"
+    return evaluation.status
+
+
 def parse_frontmatter(text: str) -> tuple[str, str]:
     name = ""
     description = ""
@@ -354,12 +372,7 @@ def import_repository(db: Session, url: str, skill_path: str | None = None, cate
             skill.score = evaluation.score
             skill.commercial_ok = evaluation.license_allowed
             skill.security_status = evaluation.security_status
-            if evaluation.security_status != "clear":
-                skill.status = "quarantined"
-            elif not evaluation.license_allowed:
-                skill.status = "pending_review"
-            elif skill.status not in {"approved", "withdrawn"}:
-                skill.status = evaluation.status
+            skill.status = synchronized_skill_status(skill, evaluation, repository)
             skill.latest_version = version
             skill.updated_at = utcnow()
             imported.append({"id": skill.id, "slug": skill.slug, "name": skill.name, "path": path,

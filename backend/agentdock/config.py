@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     discovery_min_stars: int = 100
     discovery_per_page: int = 30
 
+    # When enabled, synchronization may publish new skills from an already
+    # approved repository without a separate admin decision, provided the skill
+    # has an allowed redistribution licence and a clear security scan.
+    auto_approve_synced_skills: bool = Field(default=False, validation_alias=AliasChoices("AGENTDOCK_AUTO_APPROVE_SYNCED_SKILLS"))
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.frontend_origins.split(",") if origin.strip()]

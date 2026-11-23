@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta, timezone
+import io
+import zipfile
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -848,6 +851,14 @@ def test_skill_package_resolution_and_execution_job_creation(clients, monkeypatc
     assert "data/items.csv" in body["groups"]["data"]
     assert body["statistics_bundle_coverage"]["complete"] is True
 
+    zipped = client.get("/api/v1/skills/qa-exec-skill/package.zip")
+    assert zipped.status_code == 200
+    assert zipped.headers["content-type"].startswith("application/zip")
+    with zipfile.ZipFile(io.BytesIO(zipped.content)) as archive:
+        names = set(archive.namelist())
+    assert "skills/qa-exec-skill/SKILL.md" in names
+    assert "skills/qa-exec-skill/data/items.csv" in names
+
     requirements = client.get("/api/v1/skills/qa-exec-skill/package/requirements")
     assert requirements.status_code == 200
     assert "data/items.csv" in requirements.json()["datasets"]
@@ -895,3 +906,19 @@ def test_skill_package_resolution_and_execution_job_creation(clients, monkeypatc
         "skill": "qa-exec-skill", "arguments": ["scripts/run.py"]})
     assert restricted.status_code == 403
     monkeypatch.setattr(main.settings, "execution_allowed_skills", "")
+
+
+def test_synchronized_skill_auto_approval_policy(monkeypatch):
+    monkeypatch.setattr(main.settings, "auto_approve_synced_skills", True)
+    evaluation = SimpleNamespace(security_status="clear", license_allowed=True,
+                                 status="qualified", score=90, criteria={}, security_findings=[])
+    repository = SimpleNamespace(status="approved")
+    skill = SimpleNamespace(status="pending_review")
+    assert ingest.synchronized_skill_status(skill, evaluation, repository) == "approved"
+
+    unsafe = SimpleNamespace(**{**evaluation.__dict__, "security_status": "flagged"})
+    assert ingest.synchronized_skill_status(skill, unsafe, repository) == "quarantined"
+    unlicensed = SimpleNamespace(**{**evaluation.__dict__, "license_allowed": False})
+    assert ingest.synchronized_skill_status(skill, unlicensed, repository) == "pending_review"
+    unreviewed_repo = SimpleNamespace(status="discovered")
+    assert ingest.synchronized_skill_status(skill, evaluation, unreviewed_repo) == "qualified"

@@ -182,7 +182,30 @@ This confirms that complete packages — not just `SKILL.md` — are retrievable
 with exact hash verification for the entire approved catalogue. Docs-only
 skills have no script to run; the other 21 are eligible for isolated execution.
 
-## 10. Compatibility
+## 10. Browser execution console and package download
+
+The **Execution console** workspace page provides the same capabilities without requiring a raw MCP client:
+
+1. Choose any approved skill.
+2. Read every file in its complete package without executing anything.
+3. Download the whole verified snapshot as a ZIP (`GET /api/v1/skills/{id}/package.zip`).
+4. Select a Python script, supply arguments and run it in the isolated container.
+5. Watch status, stdout/stderr, exit code and cancel a running job.
+
+The ZIP endpoint verifies every SHA-256 before adding it to the archive and applies the same approval, licence, security and premium-entitlement gates as file retrieval.
+
+## 11. Synchronization auto-approval
+
+Set `AGENTDOCK_AUTO_APPROVE_SYNCED_SKILLS=true` to publish newly synchronized skills automatically when all of these are true:
+
+- the repository is already `approved`;
+- the skill has an allowed redistribution licence (`OWNER-AUTHORIZED` for operator-claimed owners);
+- the security scan is `clear`;
+- the admission result is `qualified` or `approved`.
+
+Security findings and licence problems still force `quarantined` or `pending_review`. This removes the waiting-for-admin step for trusted repositories without disabling the safety gates.
+
+## 12. Compatibility
 
 Existing skill search, retrieval, version listing, resource download, REST
 API, MCP search/get tools and CLI workflows remain unchanged. The new tools

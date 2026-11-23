@@ -1,10 +1,12 @@
 import ast
 import base64
 import hashlib
+import io
 import ipaddress
 import logging
 import re
 import time
+import zipfile
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -734,6 +736,36 @@ def skill_package(identifier: str, request: Request, version: str | None = None,
         message = str(error)
         status = 402 if "Purchase" in message else 403 if "approved" in message or "allow-list" in message else 404
         raise HTTPException(status_code=status, detail=message)
+
+
+@app.get("/api/v1/skills/{identifier}/package.zip")
+def skill_package_zip(identifier: str, request: Request, version: str | None = None,
+                      db: Session = Depends(db_session)):
+    user = current_user(request, db)
+    require_scope(request, "skills:read")
+    try:
+        package = execution_routes.resolve_package(db, identifier, version, user)
+    except execution_routes.ExecutionError as error:
+        message = str(error)
+        status = 402 if "Purchase" in message else 403 if "approved" in message else 404
+        raise HTTPException(status_code=status, detail=message)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for entry in package["manifest"]:
+            path = execution_routes.safe_relative_path(entry["path"])
+            content = read_resource(package["version"].snapshot_path, path)
+            if hashlib.sha256(content).hexdigest() != entry["sha256"]:
+                raise HTTPException(status_code=500, detail=f"Snapshot hash mismatch for {path}")
+            archive.writestr(f"{package['workspace_path']}/{path}", content)
+    record_usage(db, user, None, "package.downloaded", source=request_source(request),
+                 details={"skill_id": package["skill"].id, "version": package["version"].version,
+                          "files": len(package["manifest"])})
+    db.commit()
+    filename = f"{package['skill'].slug}-{package['version'].version}.zip"
+    return Response(buffer.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                             "X-AgentDock-Version": package["version"].version,
+                             "X-AgentDock-Version-Hash": package["version"].content_hash})
 
 
 @app.get("/api/v1/skills/{identifier}/package/requirements")
