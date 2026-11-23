@@ -1017,13 +1017,8 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
       <div className="metric-grid">
         <div className="metric-card"><div className="metric-label"><CircleDollarSign size={14} /> Current plan</div><div className="metric-value">{entitlements.data?.plan_name || 'Free'}</div><div className="metric-note">{entitlements.data?.plan_code || 'free'}</div></div>
         <div className="metric-card"><div className="metric-label"><Search size={14} /> Searches executed</div><div className="metric-value">{usage.data?.stats?.searches_executed ?? 0}</div><div className="metric-note">successful</div></div>
-        <div className="metric-card"><div className="metric-label"><X size={14} /> Searches failed</div><div className="metric-value">{usage.data?.stats?.searches_failed ?? 0}</div><div className="metric-note">failed</div></div>
-        <div className="metric-card"><div className="metric-label"><BookOpen size={14} /> Discovered</div><div className="metric-value">{usage.data?.stats?.discovered ?? 0}</div><div className="metric-note">discovery runs</div></div>
-        <div className="metric-card"><div className="metric-label"><X size={14} /> Discovery failed</div><div className="metric-value">{usage.data?.stats?.discovered_failed ?? 0}</div><div className="metric-note">failed</div></div>
+        <div className="metric-card"><div className="metric-label"><BookOpen size={14} /> Discovery runs</div><div className="metric-value">{usage.data?.stats?.discovered ?? 0}</div><div className="metric-note">runs</div></div>
         <div className="metric-card"><div className="metric-label"><Zap size={14} /> Skills retrieved</div><div className="metric-value">{usage.data?.skills_retrieved ?? 0}</div><div className="metric-note">successful</div></div>
-        <div className="metric-card"><div className="metric-label"><X size={14} /> Retrievals failed</div><div className="metric-value">{usage.data?.stats?.retrievals_failed ?? 0}</div><div className="metric-note">failed</div></div>
-        <div className="metric-card"><div className="metric-label"><Cpu size={14} /> Executed</div><div className="metric-value">{usage.data?.stats?.executions ?? 0}</div><div className="metric-note">successful</div></div>
-        <div className="metric-card"><div className="metric-label"><X size={14} /> Executed failed</div><div className="metric-value">{usage.data?.stats?.executions_failed ?? 0}</div><div className="metric-note">failed</div></div>
         <div className="metric-card"><div className="metric-label"><Library size={14} /> Saved skills</div><div className="metric-value">{library.data?.items?.length ?? '—'}</div><div className="metric-note">in your library</div></div>
         <div className="metric-card"><div className="metric-label"><Users size={14} /> Teams</div><div className="metric-value">{entitlements.data?.teams?.length ?? 0}</div><div className="metric-note">{entitlements.data?.teams?.length ? 'shared workspaces' : 'invite your team'}</div></div>
       </div>
@@ -1034,7 +1029,7 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
         </div>
         <div className="status-grid">
           <div className="status-item"><CheckCircle2 size={15} /><div><b>Search works</b><span>{usage.data?.skills_retrieved ?? 0} skills retrieved so far</span></div></div>
-          <div className="status-item"><CheckCircle2 size={15} /><div><b>Discovery is active</b><span>{recommended.length} recommended skills shown above</span></div></div>
+          <div className="status-item"><CheckCircle2 size={15} /><div><b>Recommended skills</b><span>{recommended.length} recommended skills shown above</span></div></div>
           <div className="status-item"><CheckCircle2 size={15} /><div><b>Use via API</b><span>Connect an agent or use the CLI</span></div></div>
           <div className="status-item"><CheckCircle2 size={15} /><div><b>Retrieve and save</b><span>Skills are approved and have versioned snapshots</span></div></div>
         </div>
@@ -1676,8 +1671,12 @@ function UsagePage({ navigate, onSelect }) {
         <div className="metric-card"><div className="metric-label">REST</div><div className="metric-value">{usage.data?.by_source?.api ?? 0}</div></div>
         <div className="metric-card"><div className="metric-label">Web</div><div className="metric-value">{usage.data?.by_source?.web ?? 0}</div></div>
         <div className="metric-card"><div className="metric-label">Searches executed</div><div className="metric-value">{stats.searches_executed ?? 0}</div></div>
-        <div className="metric-card"><div className="metric-label">Discovered</div><div className="metric-value">{stats.discovered ?? 0}</div></div>
+<div className="metric-card"><div className="metric-label">Searches failed</div><div className="metric-value">{stats.searches_failed ?? 0}</div></div>
+        <div className="metric-card"><div className="metric-label">Discovery runs</div><div className="metric-value">{stats.discovered ?? 0}</div></div>
+<div className="metric-card"><div className="metric-label">Discovery failed</div><div className="metric-value">{stats.discovered_failed ?? 0}</div></div>
         <div className="metric-card"><div className="metric-label">Retrievals failed</div><div className="metric-value">{stats.retrievals_failed ?? 0}</div></div>
+<div className="metric-card"><div className="metric-label">Executed</div><div className="metric-value">{stats.executions ?? 0}</div></div>
+<div className="metric-card"><div className="metric-label">Executed failed</div><div className="metric-value">{stats.executions_failed ?? 0}</div></div>
       </div>
       <div className="panel panel-pad">
         <div className="panel-head"><div><div className="panel-title">Daily retrievals</div><div className="panel-sub">Last 14 days</div></div></div>
@@ -2055,7 +2054,13 @@ function AdminOverview({ analytics }) {
             <div className="admin-kpi"><span>Net revenue</span><strong>{money(data.revenue.net_cents, data.revenue.currency)}</strong><small>{money(data.revenue.gross_cents, data.revenue.currency)} gross</small></div>
             <div className="admin-kpi"><span>MRR</span><strong>{money(data.revenue.mrr_cents, data.revenue.currency)}</strong><small>{data.subscriptions.active} active subscriptions</small></div>
             <div className="admin-kpi"><span>Marketplace GMV</span><strong>{money(data.revenue.marketplace_gmv_cents, data.revenue.currency)}</strong><small>{money(data.revenue.commission_cents, data.revenue.currency)} commission</small></div>
-            <div className="admin-kpi"><span>Users</span><strong>{data.users.total}</strong><small>{data.users.new_30d} new in 30 days</small></div>
+            <div className="admin-kpi"><span>Total users</span><strong>{data.users.total}</strong><small>{data.users.new_30d} new in 30 days</small></div>
+            <div className="admin-kpi"><span>Active users</span><strong>{data.users.active}</strong><small>{data.users.verified} verified</small></div>
+            <div className="admin-kpi"><span>Workspaces</span><strong>{data.workspaces.total}</strong><small>{data.workspaces.active} with members</small></div>
+            <div className="admin-kpi"><span>Approved skills</span><strong>{data.catalogue.approved}</strong><small>{data.catalogue.pending} pending approval</small></div>
+            <div className="admin-kpi"><span>Failed jobs</span><strong>{data.operations.failed_jobs}</strong><small>{data.operations.queued_jobs} queued · {data.operations.running_jobs} running</small></div>
+            <div className="admin-kpi"><span>API requests</span><strong>{data.operations.api_requests}</strong><small>{data.operations.mcp_requests} MCP requests</small></div>
+            <div className="admin-kpi"><span>Security alerts</span><strong>{data.operations.security_findings}</strong><small>{data.operations.open_rights} open rights</small></div>
           </div>
           <div className="grid-2">
             <div className="panel panel-pad">
@@ -2076,6 +2081,64 @@ function AdminOverview({ analytics }) {
                 <div className="status-item warn"><Clock size={15} /><div><b>{data.catalogue.pending}</b><span>pending review</span></div></div>
                 <div className="status-item warn"><AlertTriangle size={15} /><div><b>{data.catalogue.quarantined}</b><span>quarantined</span></div></div>
                 <div className="status-item"><Shield size={15} /><div><b>{data.operations.security_findings}</b><span>security findings</span></div></div>
+                <div className="status-item"><Activity size={15} /><div><b>{data.operations.sync_health}</b><span>synchronization health</span></div></div>
+                <div className="status-item"><Database size={15} /><div><b>{data.operations.total_events}</b><span>tracked platform events</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div className="grid-2" style={{ marginTop: 18 }}>
+            <div className="panel panel-pad">
+              <div className="panel-head"><div><div className="panel-title">Recent users</div><div className="panel-sub">Latest registrations</div></div></div>
+              <div className="activity">
+                {(data.recent_users || []).map((user) => (
+                  <div className="activity-row" key={user.id}>
+                    <span className="activity-icon"><Users size={14} /></span>
+                    <div><b>{user.name || user.email}</b><span>{user.email} · {user.role}</span></div>
+                    <time>{relativeLabel(user.created_at)}</time>
+                  </div>
+                ))}
+                {(!data.recent_users || data.recent_users.length === 0) && <p className="muted small">No users yet.</p>}
+              </div>
+            </div>
+            <div className="panel panel-pad">
+              <div className="panel-head"><div><div className="panel-title">Recent payments</div><div className="panel-sub">Latest billing events</div></div></div>
+              <div className="activity">
+                {(data.recent_payments || []).map((payment) => (
+                  <div className="activity-row" key={payment.id}>
+                    <span className="activity-icon"><CreditCardIcon size={14} /></span>
+                    <div><b>{money(payment.amount_cents, payment.currency)}</b><span>{payment.purpose} · {payment.status} · {payment.provider}</span></div>
+                    <time>{relativeLabel(payment.created_at)}</time>
+                  </div>
+                ))}
+                {(!data.recent_payments || data.recent_payments.length === 0) && <p className="muted small">No payments yet.</p>}
+              </div>
+            </div>
+          </div>
+          <div className="grid-2" style={{ marginTop: 18 }}>
+            <div className="panel panel-pad">
+              <div className="panel-head"><div><div className="panel-title">Skill approval decisions</div><div className="panel-sub">Latest moderation actions</div></div></div>
+              <div className="activity">
+                {(data.recent_decisions || []).map((decision, index) => (
+                  <div className="activity-row" key={index}>
+                    <span className="activity-icon"><Shield size={14} /></span>
+                    <div><b>{decision.skill}</b><span>{decision.decision} · {decision.reason}</span></div>
+                    <time>{relativeLabel(decision.created_at)}</time>
+                  </div>
+                ))}
+                {(!data.recent_decisions || data.recent_decisions.length === 0) && <p className="muted small">No decisions yet.</p>}
+              </div>
+            </div>
+            <div className="panel panel-pad">
+              <div className="panel-head"><div><div className="panel-title">Synchronization jobs</div><div className="panel-sub">Latest repository sync events</div></div></div>
+              <div className="activity">
+                {(data.recent_sync_jobs || []).map((job) => (
+                  <div className="activity-row" key={job.id}>
+                    <span className="activity-icon"><RefreshCw size={14} /></span>
+                    <div><b>{job.status}</b><span>{job.repository_id || 'repository'}{job.error ? ' · ' + job.error : ''}</span></div>
+                    <time>{relativeLabel(job.completed_at || job.started_at)}</time>
+                  </div>
+                ))}
+                {(!data.recent_sync_jobs || data.recent_sync_jobs.length === 0) && <p className="muted small">No sync jobs yet.</p>}
               </div>
             </div>
           </div>

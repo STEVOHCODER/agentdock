@@ -226,7 +226,26 @@ def test_search_save_retrieve_and_resource_delivery(clients):
     assert stats["retrievals_failed"] == 1
 
 
-def test_admin_cannot_override_missing_licence(clients):
+def test_admin_endpoints_require_administrator(clients):
+    client, admin_client, _ = clients
+    assert client.post("/api/v1/auth/login", json={"email": "member@example.com", "password": "a-long-member-password-123"}).status_code == 200
+    protected = [
+        "/api/v1/admin/overview",
+        "/api/v1/admin/analytics",
+        "/api/v1/admin/users",
+        "/api/v1/admin/payments",
+        "/api/v1/admin/skills",
+        "/api/v1/admin/repositories",
+        "/api/v1/admin/security",
+        "/api/v1/admin/system",
+        "/api/v1/admin/audit-logs",
+    ]
+    for path in protected:
+        response = client.get(path)
+        assert response.status_code == 403, f"{path} should require an administrator"
+    for path in protected:
+        response = admin_client.get(path)
+        assert response.status_code == 200, f"administrator should access {path}"
     _, admin_client, TestSession = clients
     db = TestSession()
     skill = Skill(slug="unknown-license-skill", name="Unknown licence skill", license_id="unknown",

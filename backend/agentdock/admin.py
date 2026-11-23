@@ -87,6 +87,15 @@ def _analytics(db: Session) -> dict:
         "users": {"total": _count(db, User), "new_30d": _count(db, User, User.created_at >= month_ago),
                   "active": _count(db, User, User.is_active.is_(True)),
                   "verified": _count(db, User, User.email_verified_at.is_not(None))},
+        "workspaces": {"total": _count(db, Team),
+                       "active": db.scalar(select(func.count(Team.id)).where(
+                           Team.id.in_(select(TeamMember.team_id).distinct()))) or 0},
+        "sync": {"total": _count(db, SynchronizationJob),
+                 "queued": _count(db, SynchronizationJob, SynchronizationJob.status == "queued"),
+                 "running": _count(db, SynchronizationJob, SynchronizationJob.status == "running"),
+                 "failed": _count(db, SynchronizationJob, SynchronizationJob.status == "failed"),
+                 "health": "healthy" if _count(db, SynchronizationJob, SynchronizationJob.status == "failed") == 0 else "degraded",
+                 "last_completed_at": db.scalar(select(func.max(SynchronizationJob.completed_at)))},
         "revenue": {"gross_cents": gross_cents, "refunded_cents": refunded,
                     "net_cents": gross_cents - refunded, "mrr_cents": mrr_cents,
                     "arr_cents": mrr_cents * 12, "marketplace_gmv_cents": marketplace_gmv,
@@ -114,7 +123,13 @@ def _analytics(db: Session) -> dict:
                        "failed_jobs": _count(db, SynchronizationJob, SynchronizationJob.status == "failed"),
                        "open_rights": _count(db, RightsRequest, RightsRequest.status.in_(["open", "reviewing"])),
                        "security_findings": _count(db, SecurityScan, SecurityScan.status != "clear"),
-                       "emails_sent": None},
+                       "emails_sent": None,
+                       "api_requests": _count(db, UsageEvent, UsageEvent.source == "api"),
+                       "mcp_requests": _count(db, UsageEvent, UsageEvent.source == "mcp"),
+                       "web_requests": _count(db, UsageEvent, UsageEvent.source == "web"),
+                       "total_events": _count(db, UsageEvent),
+                       "sync_health": "healthy" if _count(db, SynchronizationJob, SynchronizationJob.status == "failed") == 0 else "degraded",
+                       "last_sync_at": db.scalar(select(func.max(SynchronizationJob.completed_at)))},
         "series": list(series.values()),
         "recent_users": [user_data(user) for user in db.scalars(
             select(User).order_by(User.created_at.desc()).limit(5)).all()],
@@ -128,6 +143,12 @@ def _analytics(db: Session) -> dict:
                              for item in db.scalars(select(AdmissionDecision)
                                                     .order_by(AdmissionDecision.created_at.desc())
                                                     .limit(5)).all()],
+        "recent_sync_jobs": [{"id": job.id, "repository_id": job.repository_id, "status": job.status,
+                              "started_at": job.started_at, "completed_at": job.completed_at,
+                              "error": job.error}
+                             for job in db.scalars(select(SynchronizationJob)
+                                                   .order_by(SynchronizationJob.created_at.desc())
+                                                   .limit(5)).all()],
     }
 
 
