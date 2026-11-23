@@ -94,7 +94,7 @@ services:
       AGENTDOCK_REQUEST_RATE_LIMIT_PER_MINUTE: ${AGENTDOCK_REQUEST_RATE_LIMIT_PER_MINUTE:-300}
       AGENTDOCK_AUTH_RATE_LIMIT_PER_MINUTE: ${AGENTDOCK_AUTH_RATE_LIMIT_PER_MINUTE:-12}
     ports:
-      - "127.0.0.1:8000:8000"
+      - "0.0.0.0:8000:8000"
     volumes:
       - skillvault-data:/app/data
     depends_on:
