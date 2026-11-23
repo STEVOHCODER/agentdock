@@ -1,0 +1,53 @@
+{
+  "base_url": "http://92.5.229.27:8000",
+  "count": 5,
+  "skills": [
+    {
+      "slug": "obra-superpowers-skills-subagent-driven-development",
+      "name": "subagent-driven-development",
+      "category": "AI Engineering",
+      "stars": 324071,
+      "version": "git-22f0b463e7a5",
+      "source_commit": "22f0b463e7a5e579904dd6211a520321035526f7"
+    },
+    {
+      "slug": "k-dense-ai-scientific-agent-skills-skills-scientific-slides",
+      "name": "scientific-slides",
+      "category": "Backend",
+      "stars": 58107,
+      "version": "git-ec59a29a03d5",
+      "source_commit": "ec59a29a03d5c40f73ab40878df04860bc00e876"
+    },
+    {
+      "slug": "mattpocock-skills-skills-productivity-grill-me",
+      "name": "grill-me",
+      "category": "Development",
+      "stars": 330377,
+      "version": "git-abeeaf95660b",
+      "source_commit": "abeeaf95660ba9e8b7c753eb38f441ca707a8823"
+    },
+    {
+      "slug": "mattpocock-skills-skills-engineering-grill-with-docs",
+      "name": "grill-with-docs",
+      "category": "Documentation",
+      "stars": 330377,
+      "version": "git-abeeaf95660b",
+      "source_commit": "abeeaf95660ba9e8b7c753eb38f441ca707a8823"
+    },
+    {
+      "slug": "mattpocock-skills-skills-engineering-tdd",
+      "name": "tdd",
+      "category": "Frontend",
+      "stars": 330377,
+      "version": "git-abeeaf95660b",
+      "source_commit": "abeeaf95660ba9e8b7c753eb38f441ca707a8823"
+    }
+  ],
+  "instructions": {
+    "obra-superpowers-skills-subagent-driven-development": "---\nname: subagent-driven-development\ndescription: Use when executing implementation plans with independent tasks in the current session\n---\n\n# Subagent-Driven Development\n\nExecute plan by dispatching a fresh implementer subagent per task, a task review (spec compliance + code quality) after each, and a broad whole-branch review at the end.\n\n**Why subagents:** You delegate tasks to specialized agents with isolated context. By precisely crafting their instructions and context, you ensure they sta",
+    "k-dense-ai-scientific-agent-skills-skills-scientific-slides": "---\nname: scientific-slides\ndescription: Builds slide decks and presentations for research talks. Used for making PowerPoint slides, conference presentations, seminar talks, research presentations, thesis defense slides, or any scientific talk. Provides slide structure, design templates, timing guidance, and visual validation. Works with PowerPoint and LaTeX Beamer.\nallowed-tools: Read Write Edit Bash\nlicense: MIT license\ncompatibility: Python 3.12+; requests for OpenRouter generation, Pillow fo",
+    "mattpocock-skills-skills-productivity-grill-me": "---\nname: grill-me\ndescription: A relentless interview to sharpen a plan or design.\ndisable-model-invocation: true\n---\n\nCall the Skill tool with \"grilling\".\n",
+    "mattpocock-skills-skills-engineering-grill-with-docs": "---\nname: grill-with-docs\ndescription: A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.\ndisable-model-invocation: true\n---\n\nCall the Skill tool twice, for \"grilling\" and \"domain-modeling\".\n",
+    "mattpocock-skills-skills-engineering-tdd": "---\nname: tdd\ndescription: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests.\n---\n\n# Test-Driven Development\n\nTDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle: consult them before and during the loop, not after.\n\nWhen explo"
+  }
+}
