@@ -922,3 +922,5 @@ def test_synchronized_skill_auto_approval_policy(monkeypatch):
     assert ingest.synchronized_skill_status(skill, unlicensed, repository) == "pending_review"
     unreviewed_repo = SimpleNamespace(status="discovered")
     assert ingest.synchronized_skill_status(skill, evaluation, unreviewed_repo) == "qualified"
+    low_score = SimpleNamespace(**{**evaluation.__dict__, "status": "pending_review"})
+    assert ingest.synchronized_skill_status(skill, low_score, repository) == "approved"

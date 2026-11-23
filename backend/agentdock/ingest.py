@@ -31,7 +31,7 @@ def synchronized_skill_status(skill: Skill, evaluation, repository: Repository) 
     if skill.status in {"approved", "withdrawn"}:
         return skill.status
     settings = get_settings()
-    if settings.auto_approve_synced_skills and repository.status == "approved" and evaluation.status in {"qualified", "approved"}:
+    if settings.auto_approve_synced_skills and repository.status == "approved":
         return "approved"
     return evaluation.status
 
