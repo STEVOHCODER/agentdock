@@ -4,7 +4,7 @@ export class APIError extends Error {
 
 async function request(path, options = {}) {
   const headers = { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }
-  const response = await fetch(path, { credentials: 'include', ...options, headers })
+  const response = await fetch(path, { credentials: 'include', cache: 'no-store', ...options, headers })
   const type = response.headers.get('content-type') || ''
   const payload = type.includes('application/json') ? await response.json() : await response.text()
   if (!response.ok) {

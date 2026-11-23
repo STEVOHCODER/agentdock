@@ -4,7 +4,7 @@
 
 1. Copy .env.example to .env.
 2. Set AGENTDOCK_ENV=production, unique random values for AGENTDOCK_SECRET_KEY, POSTGRES_PASSWORD and REDIS_PASSWORD, a bootstrap administrator email and strong password, and the exact public HTTPS site origin in AGENTDOCK_FRONTEND_ORIGINS.
-3. Set AGENTDOCK_SESSION_SECURE_COOKIE=true. Optionally set a read-only GitHub API token.
+3. Set `AGENTDOCK_SESSION_SECURE_COOKIE=true` **only when the public URL is HTTPS**. For a direct HTTP deployment (for example `http://92.5.229.27:8000`), set it to `false`; browsers discard `Secure` cookies sent over HTTP, which makes the dashboard look empty. Optionally set a read-only GitHub API token.
 4. Create and start:
 
     docker compose up -d --build
@@ -60,7 +60,7 @@ Stop web and worker containers, restore the PostgreSQL dump and SkillVault backu
 | AGENTDOCK_REDIS_URL | Shared production request limiter; Compose constructs it from REDIS_PASSWORD |
 | AGENTDOCK_TRUSTED_PROXIES | Optional comma-separated proxy IPs/CIDRs whose forwarded client-IP headers are trusted |
 | AGENTDOCK_GITHUB_TOKEN | Optional GitHub API token |
-| AGENTDOCK_SESSION_SECURE_COOKIE | Must be true behind HTTPS |
+| AGENTDOCK_SESSION_SECURE_COOKIE | `true` behind HTTPS; `false` for direct HTTP |
 | AGENTDOCK_FRONTEND_ORIGINS | Comma-separated exact trusted browser Origins |
 | POSTGRES_PASSWORD | Compose PostgreSQL password; use a URL-safe random value |
 | REDIS_PASSWORD | Compose Redis password; use a URL-safe random value |

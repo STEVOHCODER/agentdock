@@ -976,6 +976,19 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
         </div>
       </div>
 
+      {(usage.error || library.error || entitlements.error) && (
+        <div className="banner" style={{ marginBottom: 18 }}>
+          <AlertTriangle size={16} />
+          <div>
+            <b>Live account data could not load.</b>{' '}
+            {usage.error?.status === 401 || library.error?.status === 401
+              ? 'Your browser session was not accepted. Reload and sign in again.'
+              : 'The gateway request failed. Check the connection and reload.'}
+            <button className="btn btn-outline btn-sm" style={{ marginLeft: 12 }} onClick={() => window.location.reload()}>Reload</button>
+          </div>
+        </div>
+      )}
+
       <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(8, minmax(0,1fr))' }}>
         <div className="metric-card"><div className="metric-label"><CircleDollarSign size={14} /> Current plan</div><div className="metric-value">{entitlements.data?.plan_name || 'Free'}</div><div className="metric-note">{entitlements.data?.plan_code || 'free'}</div></div>
         <div className="metric-card"><div className="metric-label"><Search size={14} /> Searches executed</div><div className="metric-value">{usage.data?.stats?.searches_executed ?? 0}</div><div className="metric-note">successful</div></div>
@@ -1622,6 +1635,16 @@ function UsagePage({ navigate, onSelect }) {
       <div className="page-head">
         <div><div className="section-eyebrow">Usage</div><h1>Retrieval analytics</h1><p>See which skills your agents actually use and where they come from.</p></div>
       </div>
+      {usage.error && (
+        <div className="banner" style={{ marginBottom: 18 }}>
+          <AlertTriangle size={16} />
+          <div>
+            <b>Usage analytics could not load.</b>{' '}
+            {usage.error?.status === 401 ? 'Your browser session was not accepted. Reload and sign in again.' : 'The gateway request failed. Check the connection and reload.'}
+            <button className="btn btn-outline btn-sm" style={{ marginLeft: 12 }} onClick={() => window.location.reload()}>Reload</button>
+          </div>
+        </div>
+      )}
       <div className="metric-grid">
         <div className="metric-card"><div className="metric-label">Total retrievals</div><div className="metric-value">{total}</div></div>
         <div className="metric-card"><div className="metric-label">MCP</div><div className="metric-value">{usage.data?.by_source?.mcp ?? stats.retrievals_success ?? 0}</div></div>
