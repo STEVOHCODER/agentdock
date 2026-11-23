@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -62,6 +63,55 @@ def test_public_health_and_skill_search(clients):
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
     assert client.get("/api/v1/skills/search").json() == {"items": [], "total": 0, "limit": 20, "offset": 0}
+
+
+def test_postgres_multiword_skill_search_uses_or_terms():
+    class PostgreSQLBind:
+        class dialect:
+            name = "postgresql"
+
+    class SearchSession:
+        @staticmethod
+        def get_bind():
+            return PostgreSQLBind()
+
+    statement, _rank = main.skill_search_query(SearchSession(), "react development")
+    compiled = statement.compile(dialect=postgresql.dialect())
+    assert "websearch_to_tsquery" in str(compiled)
+    assert "react OR development" in compiled.params.values()
+
+
+def test_production_startup_rejects_http_and_insecure_cookie_configuration(clients, monkeypatch):
+    settings = main.settings
+    monkeypatch.setattr(settings, "env", "production")
+    monkeypatch.setattr(settings, "secret_key", "x" * 48)
+    monkeypatch.setattr(settings, "public_url", "http://agentdock.example")
+    monkeypatch.setattr(settings, "session_secure_cookie", False)
+    monkeypatch.setattr(settings, "frontend_origins", "http://agentdock.example")
+    with pytest.raises(RuntimeError, match="PUBLIC_URL to use HTTPS"):
+        main.startup()
+
+    monkeypatch.setattr(settings, "public_url", "https://agentdock.example")
+    with pytest.raises(RuntimeError, match="SESSION_SECURE_COOKIE=true"):
+        main.startup()
+
+    monkeypatch.setattr(settings, "session_secure_cookie", True)
+    with pytest.raises(RuntimeError, match="browser origins must all use HTTPS"):
+        main.startup()
+
+    monkeypatch.setattr(settings, "frontend_origins", "https://agentdock.example")
+    main.startup()
+
+
+def test_interactive_api_docs_allow_only_the_assets_the_page_needs(clients):
+    client, _, _ = clients
+    docs = client.get("/api/docs")
+    assert docs.status_code == 200
+    assert "swagger-ui" in docs.text
+    assert "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in docs.headers["content-security-policy"]
+    assert "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net" in docs.headers["content-security-policy"]
+    health = client.get("/api/health")
+    assert "cdn.jsdelivr.net" not in health.headers["content-security-policy"]
 
 
 def test_regular_user_cannot_open_admin_control_center(clients):
@@ -538,6 +588,52 @@ def _approved_skill(db, slug, price=0, commercial=True, premium=True):
                         manifest=manifest, snapshot_path=snapshot))
     db.flush()
     return skill
+
+
+def test_marketplace_search_and_pagination_use_database_filters(clients):
+    client, _, TestSession = clients
+    db = TestSession()
+    member = db.scalar(select(User).where(User.email == "member@example.com"))
+    member.name = "Member"
+    entries = [
+        ("react-layouts", "React interface patterns", "Development guidance for responsive apps", "Frontend", 300, True, member.id),
+        ("python-jobs", "Python job helpers", "Automate repeatable tasks", "Backend", 100, False, None),
+        ("design-review", "Design review checklist", "Review interface decisions", "Frontend", 500, False, None),
+    ]
+    for slug, name, description, category, price, featured, creator_id in entries:
+        skill = _approved_skill(db, slug)
+        skill.name = name
+        skill.description = description
+        skill.category = category
+        db.add(MarketplaceListing(skill_id=skill.id, title=name, summary=description,
+                                  price_cents=price, status="approved", featured=featured,
+                                  creator_id=creator_id, published_at=utcnow()))
+    db.commit()
+    db.close()
+
+    search = client.get("/api/v1/marketplace/listings", params={"q": "react development"})
+    assert search.status_code == 200
+    assert search.json()["total"] == 1
+    assert search.json()["items"][0]["title"] == "React interface patterns"
+
+    by_creator = client.get("/api/v1/marketplace/listings", params={"q": "member"})
+    assert by_creator.json()["total"] == 1
+    assert by_creator.json()["items"][0]["creator"] == "Member"
+
+    page_one = client.get("/api/v1/marketplace/listings", params={"sort": "price_low", "limit": 1})
+    page_two = client.get("/api/v1/marketplace/listings", params={"sort": "price_low", "limit": 1, "offset": 1})
+    assert page_one.json()["total"] == 3
+    assert page_one.json()["items"][0]["price_cents"] == 100
+    assert page_two.json()["items"][0]["price_cents"] == 300
+    assert page_two.json()["offset"] == 1
+
+    featured = client.get("/api/v1/marketplace/listings", params={
+        "featured": "true", "category": "Frontend", "q": "react development"})
+    assert featured.json()["total"] == 1
+    categories = client.get("/api/v1/marketplace/categories")
+    assert categories.json()["items"] == [
+        {"name": "Backend", "count": 1}, {"name": "Frontend", "count": 2},
+    ]
 
 
 def test_marketplace_free_and_manual_paid_purchase_unlock_retrieval(clients):

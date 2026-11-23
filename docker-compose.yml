@@ -35,7 +35,7 @@ services:
       AGENTDOCK_ENV: production
       AGENTDOCK_DATABASE_URL: postgresql+psycopg://agentdock:${POSTGRES_PASSWORD}@db:5432/agentdock
       AGENTDOCK_STORAGE_PATH: /app/data/skillvault
-      AGENTDOCK_PUBLIC_URL: ${AGENTDOCK_PUBLIC_URL:-https://agentdock.example}
+      AGENTDOCK_PUBLIC_URL: ${AGENTDOCK_PUBLIC_URL:-https://92.5.229.27}
       AGENTDOCK_GITHUB_TOKEN: ${AGENTDOCK_GITHUB_TOKEN:-}
       AGENTDOCK_GITHUB_WEBHOOK_SECRET: ${AGENTDOCK_GITHUB_WEBHOOK_SECRET:-}
       AGENTDOCK_FIRST_PARTY_OWNERS: ${AGENTDOCK_FIRST_PARTY_OWNERS:-}
@@ -78,15 +78,15 @@ services:
 
   web:
     build: .
-    command: ["sh", "-c", "uvicorn backend.agentdock.main:app --host 0.0.0.0 --port 8000"]
+    command: ["sh", "-c", "uvicorn backend.agentdock.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips 172.30.241.3"]
     environment:
       <<: *runtime-env
       AGENTDOCK_SECRET_KEY: ${AGENTDOCK_SECRET_KEY:?Set AGENTDOCK_SECRET_KEY in .env}
       AGENTDOCK_ADMIN_EMAIL: ${AGENTDOCK_ADMIN_EMAIL:?Set AGENTDOCK_ADMIN_EMAIL in .env}
       AGENTDOCK_ADMIN_PASSWORD: ${AGENTDOCK_ADMIN_PASSWORD:?Set AGENTDOCK_ADMIN_PASSWORD in .env}
-      AGENTDOCK_SESSION_SECURE_COOKIE: ${AGENTDOCK_SESSION_SECURE_COOKIE:-false}
-      AGENTDOCK_FRONTEND_ORIGINS: ${AGENTDOCK_FRONTEND_ORIGINS:?Set your HTTPS origin in .env}
-      AGENTDOCK_TRUSTED_PROXIES: ${AGENTDOCK_TRUSTED_PROXIES:-}
+      AGENTDOCK_SESSION_SECURE_COOKIE: ${AGENTDOCK_SESSION_SECURE_COOKIE:-true}
+      AGENTDOCK_FRONTEND_ORIGINS: ${AGENTDOCK_FRONTEND_ORIGINS:-https://92.5.229.27}
+      AGENTDOCK_TRUSTED_PROXIES: 172.30.241.3
       AGENTDOCK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       AGENTDOCK_DATABASE_POOL_SIZE: ${AGENTDOCK_DATABASE_POOL_SIZE:-8}
       AGENTDOCK_DATABASE_MAX_OVERFLOW: ${AGENTDOCK_DATABASE_MAX_OVERFLOW:-12}
@@ -94,7 +94,11 @@ services:
       AGENTDOCK_REQUEST_RATE_LIMIT_PER_MINUTE: ${AGENTDOCK_REQUEST_RATE_LIMIT_PER_MINUTE:-300}
       AGENTDOCK_AUTH_RATE_LIMIT_PER_MINUTE: ${AGENTDOCK_AUTH_RATE_LIMIT_PER_MINUTE:-12}
     ports:
-      - "0.0.0.0:8000:8000"
+      - "127.0.0.1:8000:8000"
+    networks:
+      default: {}
+      proxy:
+        ipv4_address: 172.30.241.2
     volumes:
       - skillvault-data:/app/data
     depends_on:
@@ -125,7 +129,40 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2.11.9-alpine
+    environment:
+      AGENTDOCK_HOSTNAME: ${AGENTDOCK_HOSTNAME:-92.5.229.27}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      proxy:
+        ipv4_address: 172.30.241.3
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   redis-data:
   skillvault-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  proxy:
+    ipam:
+      config:
+        - subnet: 172.30.241.0/24

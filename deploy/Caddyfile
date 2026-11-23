@@ -1,0 +1,9 @@
+{$AGENTDOCK_HOSTNAME:92.5.229.27} {
+	tls {
+		issuer acme {
+			profile shortlived
+		}
+	}
+	encode zstd gzip
+	reverse_proxy web:8000
+}

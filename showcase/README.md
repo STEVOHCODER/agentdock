@@ -1,6 +1,6 @@
 # AgentDock capability showcase
 
-These skills were retrieved from the AgentDock marketplace at `http://92.5.229.27:8000`.
+These skills were retrieved from the AgentDock marketplace at `https://agentdock.link`.
 No internal model knowledge was used to describe them; the data below comes from the gateway.
 
 | Category | Skill | Slug | Stars | Version |

@@ -1,11 +1,13 @@
 import hashlib
 import ipaddress
 import logging
+import re
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -155,7 +157,7 @@ async def request_safety(request: Request, call_next):
             return JSONResponse(status_code=503, content={"detail": "Request protection is temporarily unavailable."})
         if not auth_allowed:
             return JSONResponse(status_code=429, content={"detail": "Too many sign-in attempts. Wait a minute and try again."}, headers={"Retry-After": "60"})
-    if ((request.method in {"POST", "DELETE"} and request.url.path.startswith("/api/")) or request.url.path == "/mcp"):
+    if ((request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path.startswith("/api/")) or request.url.path == "/mcp"):
         origin = request.headers.get("origin")
         if origin and origin not in settings.cors_origins:
             return JSONResponse(status_code=403, content={"detail": "Request origin is not allowed"})
@@ -163,7 +165,12 @@ async def request_safety(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com"
+    policy = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com"
+    if request.url.path == "/api/docs":
+        # FastAPI's interactive docs load their bundle and stylesheet from jsDelivr
+        # and include a small inline initializer. Keep that exception on this page.
+        policy = "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data: https://fastapi.tiangolo.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net"
+    response.headers["Content-Security-Policy"] = policy
     if settings.env == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "public, max-age=60"
@@ -270,6 +277,9 @@ def skill_search_query(db: Session, q: str = "", category: str | None = None,
     rank = None
     query = q.strip()[:120]
     if query:
+        terms = list(dict.fromkeys(re.findall(r"[\w]+", query, flags=re.UNICODE)))[:8] or [query]
+        escaped_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        phrase_pattern = f"%{escaped_query}%"
         if db.get_bind().dialect.name == "postgresql":
             empty_text = literal_column("''")
             document_text = (func.coalesce(Skill.name, empty_text) + literal_column("' '") +
@@ -279,19 +289,25 @@ def skill_search_query(db: Session, q: str = "", category: str | None = None,
                              func.coalesce(Skill.community, empty_text))
             text_config = literal_column("'simple'::regconfig")
             document = func.to_tsvector(text_config, document_text)
-            parsed = func.websearch_to_tsquery(text_config, query)
+            # OR semantics make ordinary multiword searches useful when the
+            # catalogue uses different terminology for the same skill.
+            parsed = func.websearch_to_tsquery(text_config, " OR ".join(terms))
             statement = statement.where(document.op("@@")(parsed))
-            rank = func.ts_rank_cd(document, parsed)
+            rank = func.ts_rank_cd(document, parsed) + case(
+                (Skill.name.ilike(phrase_pattern, escape="\\"), 16), else_=0)
         else:
-            terms = [term for term in query.split() if len(term) > 1][:8]
+            terms = [term for term in terms if len(term) > 1] or [query]
             expressions = [or_(Skill.name.ilike(f"%{term}%"), Skill.description.ilike(f"%{term}%"),
-                               Skill.category.ilike(f"%{term}%"), Skill.community.ilike(f"%{term}%"))
+                               Skill.category.ilike(f"%{term}%"), Skill.creator.ilike(f"%{term}%"),
+                               Skill.community.ilike(f"%{term}%"))
                            for term in terms]
             if expressions:
                 statement = statement.where(or_(*expressions))
             rank = sum((case((Skill.name.ilike(f"%{term}%"), 4),
-                             (Skill.description.ilike(f"%{term}%"), 2), else_=0)
-                        for term in terms), 0)
+                             (Skill.description.ilike(f"%{term}%"), 2),
+                             (Skill.creator.ilike(f"%{term}%"), 1), else_=0)
+                        for term in terms), 0) + case(
+                            (Skill.name.ilike(phrase_pattern, escape="\\"), 16), else_=0)
     return statement, rank
 
 
@@ -340,6 +356,14 @@ def startup():
         raise RuntimeError("AGENTDOCK_TRUSTED_PROXIES must contain valid IP addresses or CIDR ranges") from exc
     if settings.env == "production" and len(settings.secret_key) < 32:
         raise RuntimeError("Set AGENTDOCK_SECRET_KEY to a random value of at least 32 characters")
+    if settings.env == "production":
+        public_url = urlparse(settings.public_url)
+        if public_url.scheme != "https" or not public_url.netloc:
+            raise RuntimeError("Production requires AGENTDOCK_PUBLIC_URL to use HTTPS")
+        if not settings.session_secure_cookie:
+            raise RuntimeError("Production requires AGENTDOCK_SESSION_SECURE_COOKIE=true")
+        if any(urlparse(origin).scheme != "https" for origin in settings.cors_origins):
+            raise RuntimeError("Production browser origins must all use HTTPS")
     if bool(settings.admin_email) != bool(settings.admin_password):
         raise RuntimeError("Set both AGENTDOCK_ADMIN_EMAIL and AGENTDOCK_ADMIN_PASSWORD for bootstrap")
     if settings.admin_password and len(settings.admin_password) < 12:

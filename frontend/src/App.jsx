@@ -2712,38 +2712,48 @@ function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
   const [featuredOnly, setFeaturedOnly] = useState(false)
   const [category, setCategory] = useState('')
   const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
+  const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const featured = useLoad(() => get('/api/v1/marketplace/featured'), [])
+  const categoryList = useLoad(() => get('/api/v1/marketplace/categories'), [])
+  const pageSize = 24
 
-  const load = () => {
-    setLoading(true); setError(null)
-    const params = new URLSearchParams({ limit: '50' })
-    if (query.trim()) params.set('q', query.trim().slice(0, 120))
-    if (featuredOnly) params.set('featured', 'true')
-    if (category) params.set('category', category)
-    get(`/api/v1/marketplace/listings?${params}`)
-      .then((data) => setItems(data.items || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }
-  useEffect(() => { load() }, [sort, featuredOnly, category])
-  useEffect(() => { const timer = setTimeout(load, 240); return () => clearTimeout(timer) }, [query])
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset), sort })
+      if (query.trim()) params.set('q', query.trim().slice(0, 120))
+      if (featuredOnly) params.set('featured', 'true')
+      if (category) params.set('category', category)
+      get(`/api/v1/marketplace/listings?${params}`)
+        .then((data) => {
+          if (active) {
+            setItems(data.items || [])
+            setTotal(data.total || 0)
+          }
+        })
+        .catch((err) => { if (active) setError(err.message) })
+        .finally(() => { if (active) setLoading(false) })
+    }, query.trim() ? 240 : 0)
+    return () => { active = false; clearTimeout(timer) }
+  }, [query, sort, featuredOnly, category, offset])
 
-  const cards = featuredOnly ? (featured.data?.items || []) : items.slice()
-  cards.sort((a, b) => {
-    if (sort === 'price_low') return a.price_cents - b.price_cents
-    if (sort === 'price_high') return b.price_cents - a.price_cents
-    if (sort === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    return (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  })
-  const categories = useMemo(() => [...new Set(items.map((item) => item.skill?.category).filter(Boolean))], [items])
+  const cards = items.slice()
+  const categories = categoryList.data?.items || []
+  const firstResult = total === 0 ? 0 : offset + 1
+  const lastResult = Math.min(offset + cards.length, total)
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const noResults = Boolean(query.trim() || category || featuredOnly)
 
   return (
     <div className="market-v2">
       <section className="market-hero">
         <div className="market-hero-inner">
-          <span className="market-hero-overline">Marketplace � Real skill licences, premium entitlements, reviews</span>
+          <span className="market-hero-overline">Marketplace · Real skill licences, premium entitlements, reviews</span>
           <h1 className="market-hero-title">Skill lines that fit.<br />Build faster with the same tooling the best agents use.<br />Marketplace made by you, reviewed by us.
           </h1>
           <div className="market-hero-actions">
@@ -2756,7 +2766,7 @@ function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
       <div className="market-toolbar">
         <div className="topbar-search search">
           <Search size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search skills, creators and listings" />
+          <input value={query} onChange={(event) => { setOffset(0); setQuery(event.target.value) }} placeholder="Search skills, creators and listings" />
         </div>
         <Toggle value={sort} onChange={setSort} options={[
           { value: 'featured', label: 'Featured' },
@@ -2765,12 +2775,12 @@ function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
           { value: 'price_high', label: 'Highest first' },
         ]} />
         <div className="market-filters">
-          <label className="filter-group"><input type="checkbox" checked={featuredOnly} onChange={(event) => setFeaturedOnly(event.target.checked)} /> Featured only</label>
-          <select className="select" value={category} onChange={(event) => setCategory(event.target.value)} disabled={categories.length === 0}>
+          <label className="filter-group"><input type="checkbox" checked={featuredOnly} onChange={(event) => { setOffset(0); setFeaturedOnly(event.target.checked) }} /> Featured only</label>
+          <select className="select" value={category} onChange={(event) => { setOffset(0); setCategory(event.target.value) }} disabled={categories.length === 0}>
             <option value="">{categories.length ? 'Filter by category' : 'No categories yet'}</option>
-            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+            {categories.map(({ name, count }) => <option key={name} value={name}>{name} ({count})</option>)}
           </select>
-          <span className="count-note">{cards.length} listings</span>
+          <span className="count-note">{total} listings</span>
         </div>
       </div>
 
@@ -2786,13 +2796,18 @@ function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
       </div>
 
       <div className="market-section">
-        <div className="market-section-head"><h2>All listings</h2><span className="count-note">{cards.length}</span></div>
+        <div className="market-section-head"><h2>All listings</h2><span className="count-note">{total === 0 ? '0 listings' : `Showing ${firstResult}–${lastResult} of ${total}`}</span></div>
         {loading ? <Loading /> : error ? <div className="banner">{error}</div> : (
           <div className="market-grid">
             {cards.map((item) => <MarketCard key={item.id} item={item} onSelect={onSelect} />)}
-            {cards.length === 0 && <div className="market-empty-v2"><Package size={28} /><h3>No marketplace listings yet</h3><p>Skills are added after creator review, licence review and security review. Check back or publish your own.</p><button className="btn btn-primary btn-sm" onClick={() => navigate(user ? '/creator' : '/register')}>Publish a skill</button></div>}
+            {cards.length === 0 && <div className="market-empty-v2"><Package size={28} /><h3>{noResults ? 'No matching listings' : 'No marketplace listings yet'}</h3><p>{noResults ? 'Try another search or adjust your filters.' : 'Skills are added after creator review, licence review and security review. Check back or publish your own.'}</p>{!noResults && <button className="btn btn-primary btn-sm" onClick={() => navigate(user ? '/creator' : '/register')}>Publish a skill</button>}</div>}
           </div>
         )}
+        {!loading && !error && total > pageSize && <div className="market-pagination">
+          <span className="count-note">Page {Math.floor(offset / pageSize) + 1} of {pageCount}</span>
+          <div><button className="btn btn-outline btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button>
+            <button className="btn btn-outline btn-sm" disabled={offset + pageSize >= total} onClick={() => setOffset(offset + pageSize)}>Next</button></div>
+        </div>}
       </div>
     </div>
   )

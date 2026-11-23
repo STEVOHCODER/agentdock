@@ -35,7 +35,7 @@ These are the first-party AgentDock starter skills selected for programming, mak
 ## Discovery command
 
 ```powershell
-curl.exe -s "http://92.5.229.27:8000/api/v1/skills/search?q=test-driven-development"
+curl.exe -s "https://agentdock.link/api/v1/skills/search?q=test-driven-development"
 ```
 
 See [MCP and REST connection guide](mcp-api-connect.md) for the exact connection steps.

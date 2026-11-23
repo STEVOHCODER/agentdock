@@ -110,7 +110,7 @@ The CLI stores its token in `APPDATA/AgentDock/config.json` on Windows or `~/.co
 
 See `.env.example`. All settings use the `AGENTDOCK_` prefix.
 
-Production essentials: `AGENTDOCK_ENV=production`, a unique 32+ character `AGENTDOCK_SECRET_KEY`, `AGENTDOCK_SESSION_SECURE_COOKIE=true` when the public URL is HTTPS (`false` for direct HTTP, otherwise browsers discard the session cookie), PostgreSQL `AGENTDOCK_DATABASE_URL`, exact `AGENTDOCK_FRONTEND_ORIGINS`, `AGENTDOCK_PUBLIC_URL`, `AGENTDOCK_REDIS_URL`, bootstrap admin credentials, and SMTP/payment/discovery credentials as needed.
+Production essentials: `AGENTDOCK_ENV=production`, a unique 32+ character `AGENTDOCK_SECRET_KEY`, HTTPS-only `AGENTDOCK_PUBLIC_URL` and `AGENTDOCK_FRONTEND_ORIGINS`, `AGENTDOCK_SESSION_SECURE_COOKIE=true`, PostgreSQL `AGENTDOCK_DATABASE_URL`, `AGENTDOCK_REDIS_URL`, bootstrap admin credentials, and SMTP/payment/discovery credentials as needed. The Compose deployment includes Caddy TLS termination and keeps the API's port 8000 private.
 
 ## Tests and build
 

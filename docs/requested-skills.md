@@ -63,5 +63,5 @@ These skills are now in the marketplace (all approved, all free at $0). Each row
 To see the exact marketplace slug and search results, call:
 
 ```powershell
-curl.exe -s "http://92.5.229.27:8000/api/v1/marketplace/listings?limit=100"
+curl.exe -s "https://agentdock.link/api/v1/marketplace/listings?limit=100"
 ```

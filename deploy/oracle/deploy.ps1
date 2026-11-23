@@ -10,7 +10,7 @@ param(
   [string]$Shape = 'VM.Standard.E5.Flex',
   [double]$Ocpus = 2,
   [double]$MemoryGb = 8,
-  [bool]$SecureCookie = $false,
+  [bool]$SecureCookie = $true,
   [switch]$Apply,
   [switch]$AssignPublicIp
 )
@@ -22,6 +22,14 @@ if (-not (Test-Path $SshAuthorizedKeysFile)) { throw "SSH key file not found: $S
 foreach ($name in 'AGENTDOCK_SECRET_KEY','POSTGRES_PASSWORD','REDIS_PASSWORD','AGENTDOCK_ADMIN_EMAIL','AGENTDOCK_ADMIN_PASSWORD','AGENTDOCK_FRONTEND_ORIGINS','AGENTDOCK_PUBLIC_URL') {
   if (-not (Get-Item "Env:$name" -ErrorAction SilentlyContinue).Value) { throw "Set environment variable $name before launching" }
 }
+if (-not $SecureCookie) { throw 'Production deployments require secure session cookies.' }
+$publicUri = [Uri]::new($env:AGENTDOCK_PUBLIC_URL)
+if ($publicUri.Scheme -ne 'https' -or -not $publicUri.Host) { throw 'AGENTDOCK_PUBLIC_URL must be an HTTPS URL.' }
+$origins = $env:AGENTDOCK_FRONTEND_ORIGINS.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+if ($origins.Count -eq 0 -or @($origins | Where-Object { ([Uri]::new($_)).Scheme -ne 'https' }).Count -gt 0) {
+  throw 'Every AGENTDOCK_FRONTEND_ORIGINS entry must use HTTPS.'
+}
+if (-not $env:AGENTDOCK_HOSTNAME) { $env:AGENTDOCK_HOSTNAME = $publicUri.Host }
 
 $cloudInit = @"
 #cloud-config
@@ -43,6 +51,7 @@ write_files:
       AGENTDOCK_DATABASE_URL=postgresql+psycopg://agentdock:$env:POSTGRES_PASSWORD@db:5432/agentdock
       AGENTDOCK_FRONTEND_ORIGINS=$env:AGENTDOCK_FRONTEND_ORIGINS
       AGENTDOCK_PUBLIC_URL=$env:AGENTDOCK_PUBLIC_URL
+      AGENTDOCK_HOSTNAME=$env:AGENTDOCK_HOSTNAME
       AGENTDOCK_SESSION_SECURE_COOKIE=$SecureCookie
       AGENTDOCK_SEED_LIBRARY=true
       AGENTDOCK_GITHUB_TOKEN=$env:AGENTDOCK_GITHUB_TOKEN
@@ -71,7 +80,6 @@ runcmd:
   - cp /etc/agentdock.env /opt/agentdock/.env
   - chown root:root /opt/agentdock/.env && chmod 600 /opt/agentdock/.env
   - cd /opt/agentdock
-  - sed -i 's/127.0.0.1:8000:8000/0.0.0.0:8000:8000/' docker-compose.yml
   - docker-compose up -d --build
 "@
 

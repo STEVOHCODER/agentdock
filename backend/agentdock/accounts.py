@@ -1,9 +1,10 @@
 """Account, team, collection, marketplace and billing API routes."""
 from datetime import datetime, timedelta, timezone
+import re
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from . import billing, mailer
@@ -650,25 +651,59 @@ def remove_collection_item(collection_id: str, skill_id: str, request: Request,
 
 @router.get("/marketplace/listings")
 def marketplace_listings(q: str = "", category: str | None = None, featured: bool | None = None,
-                         limit: int = 20, offset: int = 0, db: Session = Depends(db_session_dependency)):
+                         sort: str = "featured", limit: int = 20, offset: int = 0,
+                         db: Session = Depends(db_session_dependency)):
     if not 1 <= limit <= 50 or offset < 0:
         raise HTTPException(status_code=422, detail="Use limit 1–50 and a non-negative offset")
+    if sort not in {"featured", "newest", "price_low", "price_high"}:
+        raise HTTPException(status_code=422, detail="Use sort=featured, newest, price_low or price_high")
     query = (select(MarketplaceListing, Skill)
              .join(Skill, Skill.id == MarketplaceListing.skill_id)
+             .outerjoin(User, User.id == MarketplaceListing.creator_id)
              .where(MarketplaceListing.status == "approved", Skill.status == "approved"))
     if category:
         query = query.where(Skill.category == category)
     if featured is True:
         query = query.where(MarketplaceListing.featured.is_(True))
+    rank = None
     if q.strip():
-        term = f"%{q.strip()[:100]}%"
-        query = query.where(or_(MarketplaceListing.title.ilike(term), MarketplaceListing.summary.ilike(term),
-                                Skill.name.ilike(term), Skill.description.ilike(term)))
+        phrase = q.strip()[:100]
+        terms = list(dict.fromkeys(re.findall(r"[\w]+", phrase, flags=re.UNICODE)))[:8] or [phrase]
+        escaped_phrase = phrase.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        phrase_pattern = f"%{escaped_phrase}%"
+        fields = (MarketplaceListing.title, MarketplaceListing.summary, Skill.name,
+                  Skill.description, Skill.category, Skill.creator, User.name, User.email)
+        matches = [or_(*(field.ilike(f"%{term}%") for field in fields)) for term in terms]
+        query = query.where(or_(*matches))
+        rank = case(
+            (MarketplaceListing.title.ilike(phrase_pattern, escape="\\"), 16),
+            (Skill.name.ilike(phrase_pattern, escape="\\"), 12),
+            (MarketplaceListing.summary.ilike(phrase_pattern, escape="\\"), 8),
+            else_=0,
+        )
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    rows = db.execute(query.order_by(MarketplaceListing.featured.desc(), MarketplaceListing.created_at.desc())
+    rank_order = [rank.desc()] if rank is not None else []
+    ordering = {
+        "featured": rank_order + [MarketplaceListing.featured.desc(), MarketplaceListing.created_at.desc()],
+        "newest": [MarketplaceListing.created_at.desc(), *rank_order],
+        "price_low": [MarketplaceListing.price_cents.asc(), *rank_order, MarketplaceListing.created_at.desc()],
+        "price_high": [MarketplaceListing.price_cents.desc(), *rank_order, MarketplaceListing.created_at.desc()],
+    }[sort]
+    rows = db.execute(query.order_by(*ordering, MarketplaceListing.id.asc())
                       .offset(offset).limit(limit)).all()
     return {"items": [listing_data(db, listing) for listing, _skill in rows],
-            "total": total, "limit": limit, "offset": offset}
+            "total": total, "limit": limit, "offset": offset, "sort": sort}
+
+
+@router.get("/marketplace/categories")
+def marketplace_categories(db: Session = Depends(db_session_dependency)):
+    rows = db.execute(
+        select(Skill.category, func.count(MarketplaceListing.id))
+        .join(MarketplaceListing, MarketplaceListing.skill_id == Skill.id)
+        .where(MarketplaceListing.status == "approved", Skill.status == "approved")
+        .group_by(Skill.category).order_by(Skill.category)
+    ).all()
+    return {"items": [{"name": name, "count": count} for name, count in rows]}
 
 
 @router.get("/marketplace/featured")

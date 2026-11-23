@@ -1,4 +1,4 @@
-const BASE = "http://92.5.229.27:8000";
+const BASE = "https://agentdock.link";
 export async function get(path) {
   const response = await fetch(BASE + path);
   if (!response.ok) throw new Error('AgentDock request failed (' + response.status + ')');

@@ -3,13 +3,15 @@
 ## Docker Compose
 
 1. Copy .env.example to .env.
-2. Set AGENTDOCK_ENV=production, unique random values for AGENTDOCK_SECRET_KEY, POSTGRES_PASSWORD and REDIS_PASSWORD, a bootstrap administrator email and strong password, and the exact public HTTPS site origin in AGENTDOCK_FRONTEND_ORIGINS.
-3. Set `AGENTDOCK_SESSION_SECURE_COOKIE=true` **only when the public URL is HTTPS**. For a direct HTTP deployment (for example `http://92.5.229.27:8000`), set it to `false`; browsers discard `Secure` cookies sent over HTTP, which makes the dashboard look empty. Optionally set a read-only GitHub API token.
+2. Set AGENTDOCK_ENV=production, unique random values for AGENTDOCK_SECRET_KEY, POSTGRES_PASSWORD and REDIS_PASSWORD, a bootstrap administrator email and strong password, and the exact public HTTPS site origin in AGENTDOCK_FRONTEND_ORIGINS. The default deployment uses `https://agentdock.link`.
+3. Keep `AGENTDOCK_SESSION_SECURE_COOKIE=true`; production startup rejects HTTP origins and insecure session cookies. Optionally set a read-only GitHub API token.
 4. Create and start:
 
     docker compose up -d --build
 
-Compose waits for PostgreSQL and Redis, applies Alembic migrations once, then starts the API/site and separate import/sync worker. The web port is bound to host loopback on port 8000; configure a host TLS reverse proxy to forward to it. Do not expose plain HTTP port 8000 to the public internet.
+Compose waits for PostgreSQL and Redis, applies Alembic migrations once, then starts the API/site, separate import/sync worker and Caddy TLS proxy. Caddy obtains and renews a short-lived public certificate for the configured IP address. It serves the site over HTTPS on port 443 and redirects HTTP on port 80. The API port is bound to host loopback on port 8000 and is reachable by Caddy only over the private proxy network.
+
+Allow inbound TCP 80 and 443 in the cloud firewall and remove public ingress to TCP 8000 before starting this stack. For a custom domain, set AGENTDOCK_HOSTNAME, AGENTDOCK_PUBLIC_URL and AGENTDOCK_FRONTEND_ORIGINS to that host together. Do not expose plain HTTP port 8000 to the public internet.
 
 Workers each claim one job at a time. You can scale the same-host worker pool with `docker compose up -d --scale worker=4`. Claims are locked in PostgreSQL, and expired leases are returned to the queue. The Compose file publishes one API instance; for multiple API replicas, put replicas behind a load balancer and point all of them at the same PostgreSQL and Redis services.
 
@@ -17,7 +19,7 @@ Tune database capacity with `AGENTDOCK_DATABASE_POOL_SIZE`, `AGENTDOCK_DATABASE_
 
 The import API accepts at most 250 repositories and 5,000 selected folders per batch, and at most 500 selected folders for one repository. Each skill is capped at 100 files and 2 MB per file; a repository import is capped at 200 MB. For a very large GitHub repository, provide explicit skill paths: the importer falls back from GitHub's truncated repository tree to selected folder trees. An unselected full-repository import returns an actionable error when GitHub truncates the repository tree.
 
-The frontend is built into the API image. Production traffic uses one origin for the SPA and API/MCP/docs.
+The frontend is built into the API image. Production traffic uses one HTTPS origin for the SPA and API/MCP/docs.
 
 ## Health and logs
 
@@ -38,7 +40,7 @@ Back up the current database and SkillVault before applying a new migration. Sch
 
 ## Reverse proxy
 
-Terminate TLS at a trusted proxy and forward to 127.0.0.1:8000. Preserve the external host and scheme. Cap request size, set request timeouts, and add proxy rate limits. Only trust forwarded headers from that proxy.
+The bundled Caddy service terminates TLS and forwards the original host, client address and HTTPS scheme to the API. Its proxy address is pinned on a private Docker network and is the only forwarded-header source trusted by Uvicorn and AgentDock.
 
 ## Rollback
 
@@ -82,6 +84,7 @@ On first startup the application seeds four subscription plans and sixteen origi
 | Variable | Purpose |
 |---|---|
 | AGENTDOCK_PUBLIC_URL | Public HTTPS origin used in emailed and checkout links |
+| AGENTDOCK_HOSTNAME | Hostname or public IP served by the Caddy TLS proxy |
 | AGENTDOCK_SEED_LIBRARY | Seed the MIT starter library on first run (default true) |
 | AGENTDOCK_SMTP_HOST / AGENTDOCK_SMTP_PORT / AGENTDOCK_SMTP_USER / AGENTDOCK_SMTP_PASSWORD / AGENTDOCK_SMTP_FROM | SMTP delivery |
 | AGENTDOCK_REQUIRE_EMAIL_VERIFICATION | Require verified email for full access when SMTP is configured |
