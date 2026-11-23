@@ -749,6 +749,7 @@ def create_execution(payload: ExecutionInput, request: Request, db: Session = De
         raise HTTPException(status_code=403, detail="You are not a member of that team")
     try:
         package = execution_routes.resolve_package(db, payload.skill, payload.version or None)
+        execution_routes.assert_execution_allowed(package["skill"])
     except execution_routes.ExecutionError as error:
         raise HTTPException(status_code=403, detail=str(error))
     manifest_paths = {entry["path"] for entry in package["manifest"]}
@@ -1310,6 +1311,7 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
             raise HTTPException(status_code=503, detail="Skill execution is disabled on this deployment")
         try:
             package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+            execution_routes.assert_execution_allowed(package["skill"])
         except execution_routes.ExecutionError as error:
             raise HTTPException(status_code=403, detail=str(error))
         script = execution_routes.normalize_package_path(package, str(args.get("script", "")))

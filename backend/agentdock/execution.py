@@ -43,16 +43,22 @@ def _version(db: Session, skill: Skill, version: str | None) -> SkillVersion:
     return item
 
 
-def resolve_package(db: Session, identifier: str, version: str | None = None) -> dict:
-    from .common import get_skill  # local import avoids a module cycle
-
-    skill = get_skill(db, identifier)
+def assert_execution_allowed(skill: Skill) -> None:
+    """Execution is limited to approved, security-reviewed, optionally allow-listed skills."""
     if skill.status != "approved" or skill.security_status != "clear":
         raise ExecutionError("Only approved, security-reviewed packages can be executed")
     settings = get_settings()
     allowed = settings.execution_allowed_skill_list
     if allowed and skill.slug.lower() not in allowed and skill.name.lower() not in allowed:
         raise ExecutionError("This skill is not in the execution allow-list")
+
+
+def resolve_package(db: Session, identifier: str, version: str | None = None) -> dict:
+    from .common import get_skill  # local import avoids a module cycle
+
+    skill = get_skill(db, identifier)
+    if skill.status != "approved" or skill.security_status != "clear":
+        raise ExecutionError("Only approved, security-reviewed packages can be read")
     item = _version(db, skill, version)
     manifest = sorted(item.manifest or [], key=lambda entry: entry.get("path", ""))
     groups = {"entrypoints": [], "scripts": [], "data": [], "references": [], "assets": [], "other": []}
@@ -291,6 +297,7 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
         if not job:
             raise ExecutionError("Execution job no longer exists")
         package = resolve_package(db, job.skill_id, job.version)
+        assert_execution_allowed(package["skill"])
         timeout, memory_bytes = _limits()
         verified = verify_snapshot(package["version"].snapshot_path, package["manifest"])
         if progress:

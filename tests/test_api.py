@@ -887,3 +887,11 @@ def test_skill_package_resolution_and_execution_job_creation(clients, monkeypatc
 
     with TestSession() as check_db:
         assert check_db.scalar(select(func.count(ExecutionJob.id))) == 2
+
+    # Package reads must not be blocked by the execution allow-list.
+    monkeypatch.setattr(main.settings, "execution_allowed_skills", "some-other-skill")
+    assert client.get("/api/v1/skills/qa-exec-skill/package").status_code == 200
+    restricted = client.post("/api/v1/executions", json={
+        "skill": "qa-exec-skill", "arguments": ["scripts/run.py"]})
+    assert restricted.status_code == 403
+    monkeypatch.setattr(main.settings, "execution_allowed_skills", "")
