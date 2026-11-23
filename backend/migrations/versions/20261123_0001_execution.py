@@ -42,6 +42,7 @@ def upgrade() -> None:
             sa.Column("error", sa.Text, nullable=False, server_default=""),
             sa.Column("exit_code", sa.Integer, nullable=True),
             sa.Column("pid", sa.Integer, nullable=True),
+            sa.Column("runner_id", sa.String(length=120), nullable=False, server_default=""),
             sa.Column("sandbox", sa.String(length=64), nullable=False, server_default="bubblewrap"),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
@@ -51,11 +52,15 @@ def upgrade() -> None:
     existing_columns = {column["name"] for column in sa.inspect(bind).get_columns("execution_jobs")}
     if "pid" not in existing_columns:
         op.add_column("execution_jobs", sa.Column("pid", sa.Integer, nullable=True))
+    if "runner_id" not in existing_columns:
+        op.add_column("execution_jobs", sa.Column("runner_id", sa.String(length=120), nullable=False, server_default=""))
+        op.create_index("ix_execution_jobs_runner_id", "execution_jobs", ["runner_id"])
     for name, index_columns in {
         "ix_execution_jobs_user_id": ["user_id"],
         "ix_execution_jobs_team_id": ["team_id"],
         "ix_execution_jobs_skill_id": ["skill_id"],
         "ix_execution_jobs_status": ["status"],
+        "ix_execution_jobs_runner_id": ["runner_id"],
     }.items():
         if name not in indexes:
             op.create_index(name, "execution_jobs", index_columns)

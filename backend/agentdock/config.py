@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     execution_max_output_bytes: int = Field(default=262144, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_MAX_OUTPUT_BYTES"))
     execution_allowed_skills: str = Field(default="", validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOWED_SKILLS"))
     execution_require_bubblewrap: bool = Field(default=True, validation_alias=AliasChoices("AGENTDOCK_EXEC_REQUIRE_BUBBLEWRAP"))
+    execution_driver: str = Field(default="bubblewrap", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_DRIVER"))
+    execution_host_workspace_root: str = Field(default="/opt/agentdock/exec-workspaces", validation_alias=AliasChoices("AGENTDOCK_EXEC_HOST_WORKSPACE_ROOT"))
+    execution_image: str = Field(default="python:3.13-slim", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_IMAGE"))
 
     # Payments. "manual" is a real invoice workflow: an administrator records the
     # payment before entitlement is granted. Paddle/Flutterwave/UrubutoPay activate

@@ -206,6 +206,72 @@ def _preexec(memory_bytes: int, cpu_seconds: int):
     return apply
 
 
+def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[str],
+                   timeout: int, memory_bytes: int) -> dict:
+    import docker
+
+    settings = get_settings()
+    client = docker.from_env()
+    host_workspace = Path(settings.execution_host_workspace_root) / workspace.name
+    script = argv[1]
+    if not script or ".." in script or PurePosixPath(script).is_absolute():
+        raise ExecutionError("A relative script path inside the package is required")
+    script_path = workspace / script
+    if not script_path.exists() or workspace not in script_path.resolve().parents:
+        raise ExecutionError("Script is not part of the approved package")
+    command = ["python3", *argv[1:]]
+    container = client.containers.run(
+        settings.execution_image,
+        command=command,
+        volumes={str(host_workspace): {"bind": "/workspace", "mode": "rw"}},
+        working_dir="/workspace",
+        environment={"HOME": "/tmp", "LANG": "C.UTF-8", "PYTHONIOENCODING": "utf-8",
+                     "PYTHONDONTWRITEBYTECODE": "1"},
+        network_disabled=True,
+        read_only=True,
+        tmpfs={"/tmp": "rw,size=64m,nosuid,nodev"},
+        mem_limit=memory_bytes,
+        nano_cpus=1_000_000_000,
+        cap_drop=["ALL"],
+        security_opt=["no-new-privileges:true"],
+        pids_limit=64,
+        detach=True,
+        auto_remove=False,
+        stdout=True,
+        stderr=True,
+    )
+    job.runner_id = container.id
+    job.status = "running"
+    job.sandbox = "docker"
+    job.started_at = utcnow()
+    job.completed_at = None
+    db.commit()
+    try:
+        try:
+            result = container.wait(timeout=timeout)
+            exit_code = int(result.get("StatusCode", -1))
+        except Exception as error:
+            if "timeout" in str(error).lower():
+                container.kill()
+                raise ExecutionError(f"Execution timed out after {timeout} seconds")
+            raise
+        stdout = container.logs(stdout=True, stderr=False).decode("utf-8", "replace")
+        stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
+        limit = settings.execution_max_output_bytes
+        return {
+            "status": "succeeded" if exit_code == 0 else "failed",
+            "exit_code": exit_code, "stdout": stdout[:limit], "stderr": stderr[:limit],
+            "error": "", "files_verified": 0, "workspace": str(workspace),
+        }
+    finally:
+        try:
+            container.remove(force=True)
+        except Exception:
+            pass
+        job.runner_id = ""
+        db.commit()
+
+
 def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
     """Run a claimed ExecutionJob. Called only by the background worker."""
     settings = get_settings()
@@ -230,6 +296,10 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
             if progress:
                 progress(f"materialized {files} files")
             argv = [job.command, *job.arguments]
+            if settings.execution_driver == "docker":
+                result = _run_in_docker(job, db, workspace, argv, timeout, memory_bytes)
+                result["files_verified"] = files
+                return result
             sandbox_command = build_sandbox_command(workspace, argv)
             process = subprocess.Popen(
                 sandbox_command,
@@ -272,4 +342,5 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
             job.pid = None
+            job.runner_id = ""
             db.commit()

@@ -165,6 +165,12 @@ def process_execution_once() -> bool:
                             os.killpg(current.pid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
+                    if current.runner_id:
+                        try:
+                            import docker
+                            docker.from_env().containers.get(current.runner_id).remove(force=True)
+                        except Exception:
+                            pass
                     return True
                 current.status = result["status"]
                 current.stdout = result["stdout"]

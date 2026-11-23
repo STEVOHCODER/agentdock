@@ -14,5 +14,7 @@ frontend/dist/
 data/
 dist/
 build/
+exec-workspaces/*
+!exec-workspaces/.gitkeep
 *.egg-info/
 *.log

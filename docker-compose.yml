@@ -122,13 +122,21 @@ services:
 
   worker:
     build: .
+    # The executor needs the Docker socket to spawn short-lived, network-less
+    # containers. It never handles web traffic or customer-facing requests.
+    user: "0:0"
     command: ["python", "-m", "backend.agentdock.worker"]
     environment:
       <<: *runtime-env
       AGENTDOCK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       AGENTDOCK_SECRET_KEY: ${AGENTDOCK_SECRET_KEY:?Set AGENTDOCK_SECRET_KEY in .env}
+      AGENTDOCK_EXECUTION_DRIVER: ${AGENTDOCK_EXECUTION_DRIVER:-bubblewrap}
+      AGENTDOCK_EXECUTION_WORKSPACE_ROOT: ${AGENTDOCK_EXECUTION_WORKSPACE_ROOT:-/workspaces}
+      AGENTDOCK_EXEC_HOST_WORKSPACE_ROOT: ${AGENTDOCK_EXEC_HOST_WORKSPACE_ROOT:-/opt/agentdock/exec-workspaces}
     volumes:
       - skillvault-data:/app/data
+      - ./exec-workspaces:/workspaces
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       migrate:
         condition: service_completed_successfully

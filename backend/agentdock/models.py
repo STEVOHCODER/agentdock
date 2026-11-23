@@ -176,6 +176,7 @@ class ExecutionJob(Base):
     error: Mapped[str] = mapped_column(Text, default="")
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    runner_id: Mapped[str] = mapped_column(String(120), default="", index=True)
     sandbox: Mapped[str] = mapped_column(String(64), default="bubblewrap")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
