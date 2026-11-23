@@ -51,11 +51,15 @@ def main():
     one = file_response["result"]["structuredContent"]
     print("RETRIEVED FILE:", one["path"], "sha256:", one["sha256"][:12], "bytes:", len(base64.b64decode(one["content"])))
 
-    job = mcp("execute_skill_script", {
+    job_response = mcp("execute_skill_script", {
         "id": SKILL,
         "script": script,
         "arguments": ["SaaS technology landing page", "--design-system"],
-    }, 4)["result"]["structuredContent"]
+    }, 4)
+    if "error" in job_response:
+        print("EXECUTE ERROR:", job_response["error"])
+        return
+    job = job_response["result"]["structuredContent"]
     print("JOB:", job["id"], job["status"], job["sandbox"])
     job_id = job["id"]
 
