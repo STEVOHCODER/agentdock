@@ -27,6 +27,25 @@ function useLoad(fetcher, deps = []) {
   return state
 }
 
+const EVENT_LABELS = {
+  search_executed: 'Search executed',
+  search_failed: 'Search failed',
+  discovery_executed: 'Discovery run',
+  discovery_failed: 'Discovery failed',
+  'skill.retrieved': 'Skill retrieved',
+  retrieve_failed: 'Retrieval failed',
+  mcp_executed: 'MCP tool executed',
+  mcp_failed: 'MCP tool failed',
+}
+
+function eventLabel(event) {
+  return EVENT_LABELS[event] || event
+}
+
+function eventDetail(item) {
+  return item.details?.query || item.details?.tool || item.skill_id || 'account event'
+}
+
 function Pill({ children, tone }) {
   return <span className={`badge ${tone ? `badge-${tone}` : ''}`}>{children}</span>
 }
@@ -989,7 +1008,7 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
         </div>
       )}
 
-      <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(8, minmax(0,1fr))' }}>
+      <div className="metric-grid">
         <div className="metric-card"><div className="metric-label"><CircleDollarSign size={14} /> Current plan</div><div className="metric-value">{entitlements.data?.plan_name || 'Free'}</div><div className="metric-note">{entitlements.data?.plan_code || 'free'}</div></div>
         <div className="metric-card"><div className="metric-label"><Search size={14} /> Searches executed</div><div className="metric-value">{usage.data?.stats?.searches_executed ?? 0}</div><div className="metric-note">successful</div></div>
         <div className="metric-card"><div className="metric-label"><X size={14} /> Searches failed</div><div className="metric-value">{usage.data?.stats?.searches_failed ?? 0}</div><div className="metric-note">failed</div></div>
@@ -1017,7 +1036,7 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
           {(usage.data?.items || []).slice(0, 5).map((item, index) => (
             <div className="activity-row" key={index}>
               <span className="activity-icon"><Zap size={14} /></span>
-              <div><b>{item.event}</b><span>{item.skill_id || 'account event'}</span></div>
+              <div><b>{eventLabel(item.event)}</b><span>{eventDetail(item)}</span></div>
               <Pill tone="cyan">{item.source}</Pill>
               <time>{relativeLabel(item.created_at)}</time>
             </div>
@@ -1673,7 +1692,7 @@ function UsagePage({ navigate, onSelect }) {
           {(usage.data?.items || []).map((item, index) => (
             <div className="activity-row" key={index}>
               <span className="activity-icon"><Zap size={14} /></span>
-              <div><b>{item.event}</b><span>{item.skill_id || 'account event'}</span></div>
+              <div><b>{eventLabel(item.event)}</b><span>{eventDetail(item)}</span></div>
               <Pill tone="cyan">{item.source}</Pill>
               <time>{relativeLabel(item.created_at)}</time>
             </div>
