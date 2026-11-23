@@ -69,10 +69,37 @@ export function download(path, filename) {
 }
 
 export function copy(text, setCopied) {
-  navigator.clipboard?.writeText(text).then(() => {
+  const finish = () => {
     setCopied?.(true)
     window.setTimeout(() => setCopied?.(false), 1600)
-  }).catch(() => setCopied?.(false))
+  }
+  const fail = () => setCopied?.(false)
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(finish).catch(fallback)
+  } else {
+    fallback()
+  }
+
+  function fallback() {
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.top = '-9999px'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      if (ok) finish()
+      else fail()
+    } catch {
+      fail()
+    }
+  }
 }
 
 export function stars(value) {

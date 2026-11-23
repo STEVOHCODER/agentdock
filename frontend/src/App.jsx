@@ -1717,6 +1717,7 @@ function IntegrationsPage({ user, navigate, notify }) {
   const [name, setName] = useState('Agent MCP')
   const [scopes, setScopes] = useState(['skills:read', 'library:read', 'account:read'])
   const [created, setCreated] = useState('')
+  const [copied, setCopied] = useState(false)
   const [refreshKeys, setRefreshKeys] = useState(0)
   const [busy, setBusy] = useState(false)
   const integrations = useLoad(() => get('/api/v1/integrations'), [])
@@ -1748,8 +1749,8 @@ function IntegrationsPage({ user, navigate, notify }) {
       {created && (
         <div className="banner info" style={{ marginBottom: 18 }}>
           <KeyRound size={17} />
-          <div style={{ flex: 1 }}><b>Copy your API key now</b><br /><span className="mono small">{created}</span></div>
-          <button className="btn btn-outline btn-sm" onClick={() => copy(created)}><Copy size={13} /> Copy</button>
+          <div style={{ flex: 1 }}><b>Copy your API key now</b><br /><span className="mono small" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{created}</span></div>
+          <button className="btn btn-outline btn-sm" onClick={() => copy(created, setCopied)}><Copy size={13} /> {copied ? 'Copied!' : 'Copy'}</button>
         </div>
       )}
       <div className="grid-2">
