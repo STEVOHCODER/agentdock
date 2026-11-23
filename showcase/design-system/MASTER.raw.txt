@@ -1,0 +1,67 @@
+╔═════════════════════════════════════════════════════════════════════════════════════════╗
+║  TARGET: SAAS TECHNOLOGY LANDING PAGE - RECOMMENDED DESIGN SYSTEM                       ║
+╚═════════════════════════════════════════════════════════════════════════════════════════╝
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+├─── PATTERN ─────────────────────────────────────────────────────────────────────────────┤
+│  Name: Hero + Testimonials + CTA                                                        │
+│     Conversion: Social proof before CTA. Use a concise set of verified testimonials     │
+│     with photo, name, and role. CTA after social proof. Provide previous/next and       │
+│     pause controls; stop rotation on focus, hover, and reduced motion; announce slide   │
+│     position. Previous/next buttons and keyboard controls must expose every slide       │
+│     without dragging.                                                                   │
+│     CTA: Hero (sticky) + Post-testimonials                                              │
+│     Sections:                                                                           │
+│       1. Hero                                                                           │
+│       2. Problem statement                                                              │
+│       3. Solution overview                                                              │
+│       4. Testimonials carousel                                                          │
+│       5. CTA                                                                            │
+├─── STYLE ───────────────────────────────────────────────────────────────────────────────┤
+│  Name: Vibrant & Block-based                                                            │
+│     Mode Support: Light supported | Dark supported                                      │
+│     Keywords: Bold, energetic, playful, block layout, geometric shapes, high color      │
+│     contrast, duotone, modern, energetic                                                │
+│     Best For: Startups, creative agencies, gaming, social media, youth-focused,         │
+│     entertainment, consumer                                                             │
+│     Performance: cost:low|drivers:none | Accessibility:                                 │
+│     risk:conditional|requires:contrast-text-4.5,keyboard,visible-focus,reduced-motion   │
+├─── COLORS ──────────────────────────────────────────────────────────────────────────────┤
+│     Primary:           #2563EB    (--color-primary)                                     │
+│     On Primary:        #FFFFFF    (--color-on-primary)                                  │
+│     Secondary:         #7C3AED    (--color-secondary)                                   │
+│     On Secondary:      #FFFFFF    (--color-on-secondary)                                │
+│     Accent/CTA:        #EC4899    (--color-accent)                                      │
+│     On Accent/CTA:     #000000    (--color-on-accent)                                   │
+│     Background:        #FFFFFF    (--color-background)                                  │
+│     Foreground:        #0F172A    (--color-foreground)                                  │
+│     Card:              #FFFFFF    (--color-card)                                        │
+│     Card Foreground:   #0F172A    (--color-card-foreground)                             │
+│     Muted:             #F1F5FD    (--color-muted)                                       │
+│     Muted Foreground:  #475569    (--color-muted-foreground)                            │
+│     Border:            #E4ECFC    (--color-border)                                      │
+│     Destructive:       #DC2626    (--color-destructive)                                 │
+│     On Destructive:    #FFFFFF    (--color-on-destructive)                              │
+│     Ring:              #2563EB    (--color-ring)                                        │
+│     Notes: Brand blue + creator purple                                                  │
+├─── TYPOGRAPHY ──────────────────────────────────────────────────────────────────────────┤
+│  Russo One / Chakra Petch                                                               │
+│     Mood: gaming, bold, action, esports, competitive, energetic                         │
+│     Best For: Gaming, esports, action games, competitive sports, entertainment          │
+│     Google Fonts:                                                                       │
+│     https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&fam  │
+│     ily=Russo+One&display=swap                                                          │
+│     CSS Import: @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:...  │
+├─── KEY EFFECTS ─────────────────────────────────────────────────────────────────────────┤
+│     Large sections (48px+ gaps), animated patterns, bold hover (color shift),           │
+│     scroll-snap, large type (32px+), 200-300ms                                          │
+├─── AVOID ───────────────────────────────────────────────────────────────────────────────┤
+│     Muted colors + Low energy                                                           │
+├─── PRE-DELIVERY CHECKLIST ──────────────────────────────────────────────────────────────┤
+│     [ ] No emojis as icons (use SVG: Heroicons/Lucide)                                  │
+│     [ ] cursor-pointer on all clickable elements                                        │
+│     [ ] Hover states with smooth transitions (150-300ms)                                │
+│     [ ] Light mode: text contrast 4.5:1 minimum                                         │
+│     [ ] Focus states visible for keyboard nav                                           │
+│     [ ] prefers-reduced-motion respected                                                │
+│     [ ] Responsive: 375px, 768px, 1024px, 1440px                                        │
+└─────────────────────────────────────────────────────────────────────────────────────────┘

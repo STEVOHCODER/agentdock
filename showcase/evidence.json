@@ -1,0 +1,225 @@
+{
+  "generated_from": "https://agentdock.link live gateway",
+  "key_prefix": "adk_MrF2XtZf...",
+  "searches": {
+    "frontend design": {
+      "total": 52,
+      "top": [
+        "frontend-design",
+        "api-and-interface-design",
+        "ui-ux-pro-max",
+        "design-taste-frontend",
+        "impeccable"
+      ]
+    },
+    "ui ux": {
+      "total": 9,
+      "top": [
+        "ui-ux-pro-max",
+        "impeccable",
+        "web-design-guidelines",
+        "master-ui-engine",
+        "webapp-testing"
+      ]
+    },
+    "design system": {
+      "total": 15,
+      "top": [
+        "tool-design",
+        "frontend-design",
+        "ui-ux-pro-max",
+        "web-design-guidelines",
+        "master-ui-engine"
+      ]
+    },
+    "react": {
+      "total": 5,
+      "top": [
+        "gsap-react",
+        "vercel-react-best-practices",
+        "vercel-react-view-transitions",
+        "vercel-react-native-skills",
+        "web-artifacts-builder"
+      ]
+    },
+    "category=Frontend": {
+      "total": 44,
+      "top": [
+        "tdd",
+        "writing-plans",
+        "verification-before-completion",
+        "requesting-code-review",
+        "receiving-code-review"
+      ]
+    },
+    "zzzqqqxxnonexistent": {
+      "total": 0,
+      "top": []
+    }
+  },
+  "packages": {
+    "nextlevelbuilder-ui-ux-pro-max-skill-claude-skills-ui-ux-pro-max": {
+      "version": "git-6ec2bb58334c",
+      "version_hash": "1edabb86ffe4f6711c9390f0d72ff3c922ad08beaa880c1f2b4aa045b7cfd7cf",
+      "files": 81,
+      "workspace_path": "skills/ui-ux-pro-max",
+      "coverage": {
+        "documents": 3,
+        "scripts": 39,
+        "datasets": 39,
+        "complete": true,
+        "missing": [],
+        "has_scripts": true,
+        "has_data": true,
+        "executable": true
+      },
+      "checks": {
+        "SKILL.md": {
+          "bytes": 18640,
+          "sha256_match": true
+        },
+        "scripts/search.py": {
+          "bytes": 13618,
+          "sha256_match": true
+        }
+      }
+    },
+    "leonxlnx-taste-skill-skills-taste-skill": {
+      "version": "git-6c0b5c78f5d3",
+      "version_hash": "d4198c3645f2c86c6b0e08143f2446e7055c06337ed85723f255ced503fc1f17",
+      "files": 1631,
+      "workspace_path": "skills/design-taste-frontend",
+      "coverage": {
+        "documents": 510,
+        "scripts": 12,
+        "datasets": 0,
+        "complete": true,
+        "missing": [],
+        "has_scripts": true,
+        "has_data": false,
+        "executable": true
+      },
+      "checks": {
+        "SKILL.md": {
+          "bytes": 30970,
+          "sha256_match": true
+        },
+        "scripts/copy-lint.mjs": {
+          "bytes": 41437,
+          "sha256_match": true
+        }
+      }
+    },
+    "anthropics-skills-skills-frontend-design": {
+      "version": "git-e4bb5d960d87",
+      "version_hash": "d43ace63d22e3502ab5c53b63138dafd0431ed5fd2fa63320285c8167ab27de6",
+      "files": 2,
+      "workspace_path": "skills/frontend-design",
+      "coverage": {
+        "documents": 2,
+        "scripts": 0,
+        "datasets": 0,
+        "complete": true,
+        "missing": [],
+        "has_scripts": false,
+        "has_data": false,
+        "executable": false
+      },
+      "checks": {
+        "SKILL.md": {
+          "bytes": 9390,
+          "sha256_match": true
+        }
+      }
+    }
+  },
+  "executions": {
+    "copy_lint": {
+      "job_id": "aba28f7a-36da-4e9b-8a80-09e5e85b96f1",
+      "status": "succeeded",
+      "exit_code": 0,
+      "stdout_bytes": 6249,
+      "command": "node",
+      "script": "scripts/copy-lint.mjs"
+    },
+    "ui_ux": {
+      "job_id": "5831c0d7-afe7-4594-9404-4a98cb80460a",
+      "status": "succeeded",
+      "exit_code": 0,
+      "arguments": [
+        "scripts/search.py",
+        "SaaS technology landing page",
+        "--design-system"
+      ],
+      "command": "python3",
+      "metrics": {
+        "duration_ms": 1173,
+        "peak_memory_bytes": 4444160,
+        "cpu_time_ms": 43
+      }
+    }
+  },
+  "lifecycle": {
+    "node_lint": {
+      "job_id": "37e56ad1-3454-4582-a07c-e5c97324b60f",
+      "status": "failed",
+      "exit_code": 2,
+      "stdout_bytes": 0,
+      "stderr_head": "copy-lint: cannot read SKILL.md: ENOENT: no such file or directory, open 'SKILL.md'\n",
+      "metrics": {
+        "duration_ms": 1323,
+        "peak_memory_bytes": 3076096,
+        "cpu_time_ms": 37,
+        "resource_stats": {
+          "memory_stats": {},
+          "cpu_stats": {
+            "cpu_usage": {
+              "total_usage": 0,
+              "usage_in_kernelmode": 0,
+              "usage_in_usermode": 0
+            },
+            "throttling_data": {
+              "periods": 0,
+              "throttled_periods": 0,
+              "throttled_time": 0
+            }
+          },
+          "peak_memory_bytes": 3076096,
+          "cpu_total_usage": 37032000
+        }
+      }
+    },
+    "invalid_script": {
+      "error": {
+        "code": -32000,
+        "message": "script must be a file from the approved package"
+      }
+    },
+    "invalid_args": {
+      "error": {
+        "code": -32000,
+        "message": "arguments must be a list of strings"
+      }
+    },
+    "failed_job": {
+      "job_id": "5639e0da-3d1d-425e-9b4a-3388d6ebf3a8",
+      "status": "failed",
+      "exit_code": 2,
+      "stderr_head": "usage: search.py [-h]\n                 [--domain {style,color,chart,landing,product,ux,typography,icons,gsap,react,web,google-fonts}]\n                 [--rtl [LEVEL]]\n                 [--stack {react,nextjs,vue,svelte,astro,swiftui,react-native,flutt"
+    },
+    "cancellation": {
+      "job_id": "ed46ea38-3d24-4119-bf73-34944b92c5a0",
+      "status": "canceled",
+      "error": "Canceled by user"
+    },
+    "read_before_revoke": true,
+    "read_after_revoke": {
+      "http_error": 401
+    }
+  },
+  "zip": {
+    "bytes": 674287,
+    "signature": "PK"
+  },
+  "tool_count": 21
+}

@@ -1,0 +1,217 @@
+{
+ "files": [
+  {
+   "words": 4448,
+   "headings": [
+    "tasteskill 2.5",
+    "House rules",
+    "1. The kind of business decides everything",
+    "2. The page plan by kind",
+    "3. What serves which page",
+    "4. The run",
+    "5. Checklist",
+    "6. Never",
+    "References"
+   ],
+   "findings": [
+    {
+     "sev": "INFO",
+     "id": "copy-contrast",
+     "count": 2,
+     "msg": "contrast frames (\"X, not Y\", isn't, rather than, instead of, without the): 2 of 2",
+     "fix": "",
+     "examples": [
+      "\", not f\" in: every screen, and looks made for this client, not from a template and not like an art piece.",
+      "\", not a\" in: nothing tilted, staggered, cut or overlapping; the hero is the work, not a mood."
+     ],
+     "hits": [
+      {
+       "match": ", not f",
+       "sentence": "every screen, and looks made for this client, not from a template and not like an art piece."
+      },
+      {
+       "match": ", not a",
+       "sentence": "nothing tilted, staggered, cut or overlapping; the hero is the work, not a mood."
+      }
+     ],
+     "budget": 2
+    },
+    {
+     "sev": "INFO",
+     "id": "copy-virtue",
+     "count": 1,
+     "msg": "virtue words about the business (honest, calm, quiet, actually, simply...; a quiet room or calm water is literal and not counted): 1 of 2",
+     "fix": "",
+     "examples": [
+      "\"quiet\" in: moments on every page, shader effects and scenes only on tech, gaming and software pages, quiet"
+     ],
+     "hits": [
+      {
+       "match": "quiet",
+       "sentence": "moments on every page, shader effects and scenes only on tech, gaming and software pages, quiet"
+      }
+     ],
+     "budget": 2
+    },
+    {
+     "sev": "INFO",
+     "id": "copy-triads",
+     "count": 32,
+     "msg": "32 lists of three (about one in 139 words)",
+     "fix": "fine when there are three things; never back to back",
+     "examples": [
+      "equal edges, real photographs and real",
+      "quiet micro-interactions, and a checker and finish",
+      "restyle, polish or review",
+      "AI, developer-tool or game"
+     ],
+     "hits": [
+      {
+       "match": "equal edges, real photographs and real",
+       "sentence": "equal edges, real photographs and real"
+      },
+      {
+       "match": "quiet micro-interactions, and a checker and finish",
+       "sentence": "quiet micro-interactions, and a checker and finish"
+      },
+      {
+       "match": "restyle, polish or review",
+       "sentence": "restyle, polish or review"
+      },
+      {
+       "match": "AI, developer-tool or game",
+       "sentence": "AI, developer-tool or game"
+      },
+      {
+       "match": "Svelte, Astro or Tailwind",
+       "sentence": "Svelte, Astro or Tailwind"
+      },
+      {
+       "match": "No tilt, carousels or timed",
+       "sentence": "No tilt, carousels or timed"
+      },
+      {
+       "match": "bakery, guesthouse or shop",
+       "sentence": "bakery, guesthouse or shop"
+      },
+      {
+       "match": "no house number, postcode or coordinates",
+       "sentence": "no house number, postcode or coordinates"
+      },
+      {
+       "match": "developer tool, fintech or banking",
+       "sentence": "developer tool, fintech or banking"
+      },
+      {
+       "match": "CSS grounds, dark pages and dark",
+       "sentence": "CSS grounds, dark pages and dark"
+      },
+      {
+       "match": "the place, orders or booking",
+       "sentence": "the place, orders or booking"
+      },
+      {
+       "match": "the work, two or more",
+       "sentence": "the work, two or more"
+      },
+      {
+       "match": "gradient, scene or loop",
+       "sentence": "gradient, scene or loop"
+      },
+      {
+       "match": "never a drawing, mood stock or a",
+       "sentence": "never a drawing, mood stock or a"
+      },
+      {
+       "match": "a WebGL part, an object or one",
+       "sentence": "a WebGL part, an object or one"
+      },
+      {
+       "match": "screenshots, CAD renders or a",
+       "sentence": "screenshots, CAD renders or a"
+      },
+      {
+       "match": "keyboard, head and share",
+       "sentence": "keyboard, head and share"
+      },
+      {
+       "match": "on a place, plausible hours and prices",
+       "sentence": "on a place, plausible hours and prices"
+      },
+      {
+       "match": "its one idea, its picture and its",
+       "sentence": "its one idea, its picture and its"
+      },
+      {
+       "match": "other sections, footer or credit",
+       "sentence": "other sections, footer or credit"
+      },
+      {
+       "match": "object, moment or scene",
+       "sentence": "object, moment or scene"
+      },
+      {
+       "match": "the checker, layout and perf",
+       "sentence": "the checker, layout and perf"
+      },
+      {
+       "match": "every client slot, its file and its",
+       "sentence": "every client slot, its file and its"
+      },
+      {
+       "match": "no placeholder, sample note or printed",
+       "sentence": "no placeholder, sample note or printed"
+      },
+      {
+       "match": "link, linked card and linked",
+       "sentence": "link, linked card and linked"
+      },
+      {
+       "match": "title, description and share",
+       "sentence": "title, description and share"
+      },
+      {
+       "match": "stock line, leftover or device",
+       "sentence": "stock line, leftover or device"
+      },
+      {
+       "match": "staggered, cut or overlapping",
+       "sentence": "staggered, cut or overlapping"
+      },
+      {
+       "match": "A card, row or tile",
+       "sentence": "A card, row or tile"
+      },
+      {
+       "match": "quotes, customers or figures",
+       "sentence": "quotes, customers or figures"
+      },
+      {
+       "match": "gradient, effect colour or tint",
+       "sentence": "gradient, effect colour or tint"
+      },
+      {
+       "match": "copy, pictures or signature",
+       "sentence": "copy, pictures or signature"
+      }
+     ]
+    },
+    {
+     "sev": "INFO",
+     "id": "copy-rhythm",
+     "count": 0,
+     "msg": "72 sentences, mean 60.9 words, spread 103.6, 0% of 4 words or fewer",
+     "fix": "",
+     "examples": [],
+     "hits": []
+    }
+   ],
+   "file": "skills/design-taste-frontend/SKILL.md",
+   "kind": null
+  }
+ ],
+ "cross": {
+  "heroes": [],
+  "shared": []
+ }
+}
