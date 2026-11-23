@@ -1758,6 +1758,7 @@ function IntegrationsPage({ user, navigate, notify }) {
                 throw new Error('clipboard unavailable')
               }
               setCopied(true)
+              alert('API key copied to clipboard!')
               window.setTimeout(() => setCopied(false), 1600)
             } catch {
               window.prompt('Copy your API key:', created)
