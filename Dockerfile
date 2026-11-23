@@ -9,6 +9,9 @@ RUN npm run build
 FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
+# bubblewrap provides per-execution network/filesystem isolation for approved skill scripts.
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap \
+    && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml requirements.txt ./
 COPY backend ./backend
 COPY backend/migrations ./backend/migrations

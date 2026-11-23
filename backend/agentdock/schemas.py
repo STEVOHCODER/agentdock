@@ -1,10 +1,28 @@
+from pathlib import Path
+
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 SUPPORTED_SCOPES = {
     "skills:read", "library:read", "library:write", "account:read",
     "teams:read", "teams:write", "marketplace:read", "marketplace:write", "billing:read",
+    "execution:run",
 }
+
+
+class ExecutionInput(BaseModel):
+    skill: str = Field(min_length=1, max_length=200)
+    version: str = Field(default="", max_length=120)
+    command: str = Field(default="python3", max_length=64)
+    arguments: list[str] = Field(default_factory=list, max_length=64)
+    team_id: str | None = Field(default=None, max_length=36)
+
+    @field_validator("command")
+    @classmethod
+    def valid_command(cls, value: str) -> str:
+        if Path(value).name not in {"python", "python3"}:
+            raise ValueError("Only python3 execution is supported")
+        return value
 
 
 class RegisterInput(BaseModel):

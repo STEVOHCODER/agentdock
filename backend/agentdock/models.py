@@ -160,6 +160,28 @@ class CollectionItem(Base):
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ExecutionJob(Base):
+    __tablename__ = "execution_jobs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
+    skill_id: Mapped[str] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), index=True)
+    version: Mapped[str] = mapped_column(String(120))
+    version_hash: Mapped[str] = mapped_column(String(128), default="")
+    command: Mapped[str] = mapped_column(Text)
+    arguments: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    stdout: Mapped[str] = mapped_column(Text, default="")
+    stderr: Mapped[str] = mapped_column(Text, default="")
+    error: Mapped[str] = mapped_column(Text, default="")
+    exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sandbox: Mapped[str] = mapped_column(String(64), default="bubblewrap")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class UsageEvent(Base):
     __tablename__ = "usage_events"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

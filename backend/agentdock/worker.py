@@ -1,5 +1,7 @@
 import argparse
 import logging
+import os
+import signal
 import time
 from datetime import timedelta
 
@@ -10,9 +12,10 @@ from .config import get_settings
 from .db import Base, SessionLocal, engine
 from .github import parse_repo_url
 from .ingest import import_repository
-from .models import AuditLog, ImportBatch, Repository, SynchronizationJob, utcnow
+from .models import AuditLog, ExecutionJob, ImportBatch, Repository, SynchronizationJob, utcnow
 from .billing import expire_due_subscriptions
 from .discovery import run_discovery_if_due
+from . import execution as execution_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("agentdock.worker")
@@ -130,7 +133,68 @@ def _refresh_job_lease(db, job_id: str, current: int, total: int) -> None:
     db.commit()
 
 
+def claim_execution_job(db):
+    return db.scalar(
+        select(ExecutionJob)
+        .where(ExecutionJob.status == "queued")
+        .order_by(ExecutionJob.created_at, ExecutionJob.id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+
+
+def process_execution_once() -> bool:
+    """Run at most one queued execution. Returns True when work was processed."""
+    if not get_settings().execution_enabled:
+        return False
+    with SessionLocal() as db:
+        job = claim_execution_job(db)
+        if not job:
+            return False
+        job_id = job.id
+        db.commit()
+        try:
+            result = execution_service.run_job(job_id, progress=lambda message: logger.info("execution %s: %s", job_id, message))
+            with SessionLocal() as update_db:
+                current = update_db.get(ExecutionJob, job_id)
+                if not current:
+                    return True
+                if current.status == "canceled":
+                    if current.pid:
+                        try:
+                            os.killpg(current.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    return True
+                current.status = result["status"]
+                current.stdout = result["stdout"]
+                current.stderr = result["stderr"]
+                current.error = result["error"]
+                current.exit_code = result["exit_code"]
+                current.completed_at = utcnow()
+                update_db.add(AuditLog(
+                    actor_id=current.user_id, action="skill.executed", target_type="skill",
+                    target_id=current.skill_id,
+                    details={"job_id": job_id, "version": current.version, "exit_code": current.exit_code,
+                             "files_verified": result.get("files_verified", 0)},
+                ))
+                update_db.commit()
+            logger.info("execution %s finished: %s", job_id, result["status"])
+        except Exception as exc:
+            logger.exception("execution %s failed", job_id)
+            with SessionLocal() as update_db:
+                current = update_db.get(ExecutionJob, job_id)
+                if current and current.status != "canceled":
+                    current.status = "failed"
+                    current.error = str(exc)[:2000]
+                    current.completed_at = utcnow()
+                    update_db.commit()
+        return True
+
+
 def run_once() -> bool:
+    if process_execution_once():
+        return True
     if get_settings().env != "production":
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:

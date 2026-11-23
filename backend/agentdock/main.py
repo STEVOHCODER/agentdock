@@ -1,3 +1,5 @@
+import ast
+import base64
 import hashlib
 import ipaddress
 import logging
@@ -24,15 +26,15 @@ from .common import (create_email_token, entitlement_summary, enrich_skill, list
                      premium_entitlement, public_base_url, record_usage, review_stats)
 from .db import Base, SessionLocal, engine
 from .github import parse_repo_url
-from .models import (APIKey, AdmissionDecision, AuditLog, Collection, CollectionItem, ImportBatch,
+from .models import (APIKey, AdmissionDecision, AuditLog, Collection, CollectionItem, ExecutionJob, ImportBatch,
                      MarketplaceListing, Purchase, Repository, Skill, SkillVersion, Subscription,
                      SynchronizationJob, Team, TeamMember, TrustedPublisher, UsageEvent, User, UserSession,
                      utcnow)
-from .schemas import (APIKeyInput, CollectionInput, DecisionInput, ImportBatchInput, ImportInput,
+from .schemas import (APIKeyInput, CollectionInput, DecisionInput, ExecutionInput, ImportBatchInput, ImportInput,
                       ImportSourceInput, LoginInput, RegisterInput, RepositoryStatusInput, TrustedPublisherInput)
 from .security import admin_user, create_session, current_user, optional_user, issue_api_key, password_hash, require_scope, verify_password
 from .vault import read_resource
-from . import accounts, admin as admin_routes, mailer
+from . import accounts, admin as admin_routes, execution as execution_routes, mailer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("agentdock")
@@ -690,6 +692,116 @@ def skill_resource(identifier: str, resource_path: str, version: str | None = No
     return RawResponse(content, media_type="text/plain; charset=utf-8", headers={"ETag": f'"{hashlib.sha256(content).hexdigest()}"'})
 
 
+def _execution_job_data(job: ExecutionJob) -> dict:
+    return {
+        "id": job.id, "skill_id": job.skill_id, "version": job.version,
+        "version_hash": job.version_hash, "command": job.command, "arguments": job.arguments,
+        "status": job.status, "stdout": job.stdout, "stderr": job.stderr,
+        "error": job.error, "exit_code": job.exit_code, "sandbox": job.sandbox,
+        "created_at": job.created_at, "started_at": job.started_at, "completed_at": job.completed_at,
+    }
+
+
+def _package_payload(db: Session, package: dict) -> dict:
+    version = package["version"]
+    return {
+        "skill": {"id": package["skill"].id, "slug": package["skill"].slug, "name": package["skill"].name,
+                  "license": package["skill"].license_id, "source_url": package["skill"].source_url},
+        "version": version.version, "version_hash": version.content_hash,
+        "source_commit": version.source_commit, "workspace_path": package["workspace_path"],
+        "manifest": package["manifest"], "groups": package["groups"],
+        "statistics_bundle_coverage": package.get("statistics_bundle_coverage", {}),
+        "immutable": True,
+    }
+
+
+@app.get("/api/v1/skills/{identifier}/package")
+def skill_package(identifier: str, request: Request, version: str | None = None,
+                  db: Session = Depends(db_session)):
+    current_user(request, db)
+    require_scope(request, "skills:read")
+    try:
+        return _package_payload(db, execution_routes.resolve_package(db, identifier, version))
+    except execution_routes.ExecutionError as error:
+        raise HTTPException(status_code=403 if "approved" in str(error) or "allow-list" in str(error) else 404, detail=str(error))
+
+
+@app.get("/api/v1/skills/{identifier}/package/requirements")
+def skill_package_requirements(identifier: str, request: Request, version: str | None = None,
+                               db: Session = Depends(db_session)):
+    current_user(request, db)
+    require_scope(request, "skills:read")
+    try:
+        package = execution_routes.resolve_package(db, identifier, version)
+        return execution_routes.detect_requirements(package["manifest"], package["version"].snapshot_path)
+    except execution_routes.ExecutionError as error:
+        raise HTTPException(status_code=403, detail=str(error))
+
+
+@app.post("/api/v1/executions", status_code=202)
+def create_execution(payload: ExecutionInput, request: Request, db: Session = Depends(db_session)):
+    user = current_user(request, db)
+    require_scope(request, "execution:run")
+    if not settings.execution_enabled:
+        raise HTTPException(status_code=503, detail="Skill execution is disabled on this deployment")
+    if payload.team_id and not db.scalar(select(TeamMember.id).where(
+            TeamMember.team_id == payload.team_id, TeamMember.user_id == user.id)):
+        raise HTTPException(status_code=403, detail="You are not a member of that team")
+    try:
+        package = execution_routes.resolve_package(db, payload.skill, payload.version or None)
+    except execution_routes.ExecutionError as error:
+        raise HTTPException(status_code=403, detail=str(error))
+    manifest_paths = {entry["path"] for entry in package["manifest"]}
+    if not payload.arguments or payload.arguments[0] not in manifest_paths:
+        raise HTTPException(status_code=422, detail="arguments[0] must be a script path from the approved package")
+    job = ExecutionJob(
+        user_id=user.id, team_id=payload.team_id, skill_id=package["skill"].id,
+        version=package["version"].version, version_hash=package["version"].content_hash,
+        command=payload.command, arguments=payload.arguments, status="queued",
+    )
+    db.add(job)
+    record_usage(db, user, None, "execution.requested", source="api",
+                 details={"skill_id": package["skill"].id, "version": package["version"].version,
+                          "script": payload.arguments[0]})
+    db.commit()
+    return _execution_job_data(job)
+
+
+@app.get("/api/v1/executions")
+def list_executions(request: Request, limit: int = 20, offset: int = 0, db: Session = Depends(db_session)):
+    user = current_user(request, db)
+    require_scope(request, "execution:run")
+    rows = db.scalars(select(ExecutionJob).where(ExecutionJob.user_id == user.id)
+                      .order_by(ExecutionJob.created_at.desc()).offset(max(0, offset)).limit(min(max(limit, 1), 100))).all()
+    return {"items": [_execution_job_data(row) for row in rows]}
+
+
+@app.get("/api/v1/executions/{job_id}")
+def get_execution(job_id: str, request: Request, db: Session = Depends(db_session)):
+    user = current_user(request, db)
+    require_scope(request, "execution:run")
+    job = db.get(ExecutionJob, job_id)
+    if not job or job.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    return _execution_job_data(job)
+
+
+@app.post("/api/v1/executions/{job_id}/cancel")
+def cancel_execution(job_id: str, request: Request, db: Session = Depends(db_session)):
+    user = current_user(request, db)
+    require_scope(request, "execution:run")
+    job = db.get(ExecutionJob, job_id)
+    if not job or job.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    if job.status in {"succeeded", "failed", "canceled"}:
+        raise HTTPException(status_code=409, detail="Execution is already finished")
+    job.status = "canceled"
+    job.completed_at = utcnow()
+    job.error = "Canceled by user"
+    db.commit()
+    return _execution_job_data(job)
+
+
 @app.get("/api/v1/user/library")
 def library(request: Request, db: Session = Depends(db_session)):
     user = current_user(request, db)
@@ -1056,6 +1168,10 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
         "browse_marketplace": "marketplace:read", "list_my_purchases": "marketplace:read",
         "save_skill_to_collection": "library:write", "list_user_collections": "library:read",
         "list_teams": "teams:read", "check_subscription": "account:read", "get_usage": "account:read",
+        "resolve_skill_package": "skills:read", "list_skill_files": "skills:read",
+        "retrieve_skill_file": "skills:read", "execute_skill_script": "execution:run",
+        "get_execution_status": "execution:run", "retrieve_execution_result": "execution:run",
+        "cancel_execution": "execution:run",
     }.get(name)
     if required_scope:
         require_scope(request, required_scope)
@@ -1153,6 +1269,81 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
                                                         TeamMember.user_id == user.id))
             data.append({"id": team.id, "name": team.name, "plan_code": team.plan_code,
                          "role": member.role if member else None, "seat_limit": team.seat_limit})
+    elif name == "resolve_skill_package":
+        try:
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+        except execution_routes.ExecutionError as error:
+            raise HTTPException(status_code=403, detail=str(error))
+        data = _package_payload(db, package)
+        data["requirements"] = execution_routes.detect_requirements(package["manifest"], package["version"].snapshot_path)
+    elif name == "list_skill_files":
+        try:
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+        except execution_routes.ExecutionError as error:
+            raise HTTPException(status_code=403, detail=str(error))
+        data = {
+            "version": package["version"].version,
+            "version_hash": package["version"].content_hash,
+            "workspace_path": package["workspace_path"],
+            "groups": package["groups"],
+            "files": package["manifest"],
+            "statistics_bundle_coverage": package.get("statistics_bundle_coverage", {}),
+        }
+    elif name == "retrieve_skill_file":
+        try:
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+        except execution_routes.ExecutionError as error:
+            raise HTTPException(status_code=403, detail=str(error))
+        path = execution_routes.safe_relative_path(str(args.get("path", "")))
+        try:
+            content = read_resource(package["version"].snapshot_path, path)
+        except (ValueError, FileNotFoundError):
+            raise HTTPException(status_code=404, detail="Skill file not found in this immutable version")
+        data = {"path": path, "version": package["version"].version,
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "encoding": "base64", "content": base64.b64encode(content).decode("ascii")}
+    elif name == "execute_skill_script":
+        if not settings.execution_enabled:
+            raise HTTPException(status_code=503, detail="Skill execution is disabled on this deployment")
+        try:
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+        except execution_routes.ExecutionError as error:
+            raise HTTPException(status_code=403, detail=str(error))
+        script = str(args.get("script", ""))
+        manifest_paths = {entry["path"] for entry in package["manifest"]}
+        if not script or script not in manifest_paths:
+            raise HTTPException(status_code=422, detail="script must be a file from the approved package")
+        command = str(args.get("command", "python3"))
+        if Path(command).name not in {"python", "python3"}:
+            raise HTTPException(status_code=422, detail="Only python3 execution is supported")
+        extra = args.get("arguments") or []
+        if not isinstance(extra, list) or any(not isinstance(item, str) for item in extra):
+            raise HTTPException(status_code=422, detail="arguments must be a list of strings")
+        job = ExecutionJob(
+            user_id=user.id, skill_id=package["skill"].id, version=package["version"].version,
+            version_hash=package["version"].content_hash, command=command,
+            arguments=[script, *extra], status="queued")
+        db.add(job)
+        record_usage(db, user, None, "execution.requested", "mcp",
+                     details={"skill_id": package["skill"].id, "version": package["version"].version, "script": script})
+        db.commit()
+        data = _execution_job_data(job)
+    elif name in {"get_execution_status", "retrieve_execution_result"}:
+        job = db.get(ExecutionJob, str(args.get("job_id", "")))
+        if not job or job.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Execution not found")
+        data = _execution_job_data(job)
+    elif name == "cancel_execution":
+        job = db.get(ExecutionJob, str(args.get("job_id", "")))
+        if not job or job.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Execution not found")
+        if job.status in {"succeeded", "failed", "canceled"}:
+            raise HTTPException(status_code=409, detail="Execution is already finished")
+        job.status = "canceled"
+        job.completed_at = utcnow()
+        job.error = "Canceled by user"
+        db.commit()
+        data = _execution_job_data(job)
     else:
         raise HTTPException(status_code=404, detail="Unknown AgentDock tool")
     if name in {"get_skill", "get_skill_resource"}:
@@ -1180,6 +1371,13 @@ MCP_TOOLS = [
     {"name": "browse_marketplace", "description": "Browse approved premium and free skill listings.", "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 25}}}},
     {"name": "list_my_purchases", "description": "List premium skills purchased by the signed-in account.", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "list_teams", "description": "List teams and workspaces the signed-in account belongs to.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "resolve_skill_package", "description": "Resolve a complete immutable skill package from SkillVault with grouped files and static dependency analysis.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "version": {"type": "string"}}, "required": ["id"]}},
+    {"name": "list_skill_files", "description": "List every file in an immutable skill package with SHA-256 hashes and relative paths.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "version": {"type": "string"}}, "required": ["id"]}},
+    {"name": "retrieve_skill_file", "description": "Retrieve one exact file from an immutable SkillVault snapshot, base64 encoded.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "path": {"type": "string"}, "version": {"type": "string"}}, "required": ["id", "path"]}},
+    {"name": "execute_skill_script", "description": "Execute an approved script in an isolated temporary workspace with no network access. Returns a job id.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "script": {"type": "string"}, "version": {"type": "string"}, "command": {"type": "string"}, "arguments": {"type": "array", "items": {"type": "string"}}}, "required": ["id", "script"]}},
+    {"name": "get_execution_status", "description": "Get the status of an execution job.", "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}},
+    {"name": "retrieve_execution_result", "description": "Retrieve stdout, stderr and exit code for a finished execution job.", "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}},
+    {"name": "cancel_execution", "description": "Cancel a queued or running execution job.", "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}},
 ]
 
 
@@ -1216,6 +1414,8 @@ def _mcp_dispatch(request: Request, db: Session, body) -> dict | Response:
                 record_failure(db, user, "search_failed", "mcp", details)
             elif tool in {"get_skill", "get_skill_resource"}:
                 record_failure(db, user, "retrieve_failed", "mcp", details)
+            elif tool == "execute_skill_script":
+                record_failure(db, user, "execution_failed", "mcp", details)
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": exc.detail}}
         except Exception:
             db.rollback()
@@ -1228,6 +1428,8 @@ def _mcp_dispatch(request: Request, db: Session, body) -> dict | Response:
                 record_failure(db, user, "search_failed", "mcp", details)
             elif tool in {"get_skill", "get_skill_resource"}:
                 record_failure(db, user, "retrieve_failed", "mcp", details)
+            elif tool == "execute_skill_script":
+                record_failure(db, user, "execution_failed", "mcp", details)
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": "Internal tool error"}}
     elif method == "ping":
         result = {}

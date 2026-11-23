@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     require_email_verification: bool = False
 
+    # Skill execution bridge. Execution runs in the background worker, never in
+    # the web process, and is confined with bubblewrap when available.
+    execution_enabled: bool = Field(default=False, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_ENABLED"))
+    execution_workspace_root: str = Field(default="/tmp/agentdock-exec", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_WORKSPACE_ROOT"))
+    execution_timeout_seconds: int = Field(default=120, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_TIMEOUT_SECONDS"))
+    execution_max_memory_mb: int = Field(default=1024, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_MAX_MEMORY_MB"))
+    execution_max_output_bytes: int = Field(default=262144, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_MAX_OUTPUT_BYTES"))
+    execution_allowed_skills: str = Field(default="", validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOWED_SKILLS"))
+    execution_require_bubblewrap: bool = Field(default=True, validation_alias=AliasChoices("AGENTDOCK_EXEC_REQUIRE_BUBBLEWRAP"))
+
     # Payments. "manual" is a real invoice workflow: an administrator records the
     # payment before entitlement is granted. Paddle/Flutterwave/UrubutoPay activate
     # only after a verified provider webhook.
@@ -96,6 +106,10 @@ class Settings(BaseSettings):
     @property
     def first_party_owner_list(self) -> list[str]:
         return [item.strip().lower() for item in self.first_party_owners.split(",") if item.strip()]
+
+    @property
+    def execution_allowed_skill_list(self) -> set[str]:
+        return {item.strip().lower() for item in self.execution_allowed_skills.split(",") if item.strip()}
 
     @property
     def smtp_configured(self) -> bool:

@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.agentdock import ingest, main, vault
 from backend.agentdock.db import Base
-from backend.agentdock.models import (APIKey, ImportBatch, MarketplaceListing, Payment, Repository,
+from backend.agentdock.models import (APIKey, ExecutionJob, ImportBatch, MarketplaceListing, Payment, Repository,
                                       RightsRequest, Skill, SkillVersion, SubscriptionPlan,
                                       SynchronizationJob, Team, TeamMember, User, utcnow)
 from backend.agentdock.security import password_hash
@@ -811,3 +811,79 @@ def test_all_payment_providers_are_visible_even_without_credentials(clients):
     assert providers["manual"]["active"] is True
     assert providers["paddle"]["status"] == "available"
     assert "credentials" in providers["urubutopay"]["description"].lower() or providers["urubutopay"]["status"] == "available"
+
+
+def test_skill_package_resolution_and_execution_job_creation(clients, monkeypatch):
+    client, _, TestSession = clients
+    monkeypatch.setattr(main.settings, "execution_enabled", True)
+    monkeypatch.setattr(main.settings, "execution_allowed_skills", "")
+
+    db = TestSession()
+    skill = Skill(
+        slug="qa-exec-skill", name="qa-exec-skill", description="Execution QA",
+        instructions="---\nname: qa-exec-skill\ndescription: Execution QA\n---\nUse scripts/run.py.",
+        path="skills/qa-exec-skill", category="Testing", status="approved",
+        security_status="clear", score=95, stars=10, latest_version="git-qa1")
+    db.add(skill)
+    db.flush()
+    snapshot, digest, manifest = save_snapshot(skill.id, "git-qa1", {
+        "SKILL.md": skill.instructions.encode(),
+        "scripts/run.py": b"import csv\nprint('ok')\n",
+        "data/items.csv": b"name\nvalue\n",
+    })
+    db.add(SkillVersion(skill_id=skill.id, version="git-qa1", source_commit="qa1",
+                        content_hash=digest, manifest=manifest, snapshot_path=snapshot))
+    db.commit()
+    skill_id = skill.id
+    db.close()
+
+    assert client.post("/api/v1/auth/login", json={
+        "email": "member@example.com", "password": "a-long-member-password-123"}).status_code == 200
+
+    package = client.get("/api/v1/skills/qa-exec-skill/package")
+    assert package.status_code == 200
+    body = package.json()
+    assert body["version"] == "git-qa1"
+    assert "scripts/run.py" in body["groups"]["scripts"]
+    assert "data/items.csv" in body["groups"]["data"]
+    assert body["statistics_bundle_coverage"]["complete"] is True
+
+    requirements = client.get("/api/v1/skills/qa-exec-skill/package/requirements")
+    assert requirements.status_code == 200
+    assert "data/items.csv" in requirements.json()["datasets"]
+
+    created = client.post("/api/v1/executions", json={
+        "skill": "qa-exec-skill", "arguments": ["scripts/run.py"],
+    })
+    assert created.status_code == 202
+    job = created.json()
+    assert job["status"] == "queued"
+    assert job["arguments"] == ["scripts/run.py"]
+    assert job["version_hash"] == digest
+
+    status = client.get(f"/api/v1/executions/{job['id']}")
+    assert status.status_code == 200
+    assert status.json()["id"] == job["id"]
+
+    key_response = client.post("/api/v1/auth/api-keys", json={
+        "name": "Execution MCP", "scopes": ["skills:read", "execution:run"]})
+    assert key_response.status_code == 201
+    key_headers = {"Authorization": "Bearer " + key_response.json()["api_key"],
+                   "Accept": "application/json, text/event-stream"}
+    tools = client.post("/mcp", headers=key_headers, json={
+        "jsonrpc": "2.0", "id": 1, "method": "tools/list"}).json()
+    names = [tool["name"] for tool in tools["result"]["tools"]]
+    for expected in ["resolve_skill_package", "list_skill_files", "retrieve_skill_file",
+                     "execute_skill_script", "get_execution_status", "retrieve_execution_result",
+                     "cancel_execution"]:
+        assert expected in names
+
+    executed = client.post("/mcp", headers=key_headers, json={
+        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+        "params": {"name": "execute_skill_script", "arguments": {
+            "id": "qa-exec-skill", "script": "scripts/run.py"}}}).json()
+    assert "error" not in executed
+    assert executed["result"]["structuredContent"]["status"] == "queued"
+
+    with TestSession() as check_db:
+        assert check_db.scalar(select(func.count(ExecutionJob.id))) == 2
