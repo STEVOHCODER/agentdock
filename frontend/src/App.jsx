@@ -1750,7 +1750,7 @@ function IntegrationsPage({ user, navigate, notify }) {
         <div className="banner info" style={{ marginBottom: 18 }}>
           <KeyRound size={17} />
           <div style={{ flex: 1 }}><b>Copy your API key now</b><br /><span className="mono small" style={{ userSelect: 'all', wordBreak: 'break-all' }}>{created}</span></div>
-          <button className="btn btn-outline btn-sm" onClick={() => copy(created, setCopied)}><Copy size={13} /> {copied ? 'Copied!' : 'Copy'}</button>
+          <button className="btn btn-outline btn-sm" onClick={() => { copy(created, setCopied); setCopied(true); window.setTimeout(() => setCopied(false), 1600) }}><Copy size={13} /> {copied ? 'Copied!' : 'Copy'}</button>
         </div>
       )}
       <div className="grid-2">
