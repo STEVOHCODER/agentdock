@@ -205,7 +205,45 @@ Set `AGENTDOCK_AUTO_APPROVE_SYNCED_SKILLS=true` to publish newly synchronized sk
 
 Security findings and licence problems still force `quarantined` or `pending_review`. This removes the waiting-for-admin step for trusted repositories without disabling the safety gates.
 
-## 12. Compatibility
+## 12. Generic runtimes
+
+Execution is no longer tied to UI UX Pro Max or Python alone. `AGENTDOCK_EXECUTION_RUNTIMES` defines the approved commands (default `python3,python,node,nodejs,bash,sh`). The executor resolves a runtime from the requested command and the script extension:
+
+| Script | Runtime |
+|---|---|
+| `.py` | `python3` |
+| `.js`, `.mjs`, `.cjs` | `node` |
+| `.sh`, `.bash` | `bash` |
+
+Mismatched combinations are rejected before a job is queued. The runner image includes Python 3.13, Node 20 and Bash.
+
+## 13. Dependency management
+
+The executor statically reads `requirements.lock.txt`, `requirements.txt`, `pyproject.toml`, `poetry.lock`, `Pipfile.lock`, `package.json`, `package-lock.json`, `yarn.lock` and `pnpm-lock.yaml`. It records a dependency plan with the job: detected packages, runtime families, lock status and install commands.
+
+- Locked plans install in a short-lived bootstrap container with network enabled and no secrets.
+- The main execution container then runs with network disabled and `PYTHONPATH` / `NODE_PATH` pointing at the installed dependencies.
+- Unlocked plans are refused unless `AGENTDOCK_EXEC_ALLOW_UNLOCKED_DEPS=true`.
+- Dependency installation can be disabled with `AGENTDOCK_EXEC_ALLOW_DEPENDENCY_NETWORK=false`.
+
+## 14. Team-aware MCP and quotas
+
+`execute_skill_script` now accepts `team_id`, `timeout_seconds`, `max_memory_mb`, `max_cpu_millicores` and `network`. Team membership is verified before a job is created. Daily execution quotas come from the active plan (`execution_quota` column): Free 20, Developer 100, Duo 250, Small Team 600, Growth Team 1500. Team jobs count against the team scope; personal jobs count against the user scope. REST `/api/v1/executions` and MCP status/result/cancel calls respect team membership.
+
+## 15. Execution observability
+
+Every job records duration, peak memory, CPU time and raw Docker stats. `GET /api/v1/executions` supports `status`, `skill` and `team_id` filters with total/pagination. The browser Execution console shows quota, runtime, per-job limits, dependency status, stdout/stderr, and a paginated history table with duration, memory, exit code and errors.
+
+## 16. Security hardening
+
+- Per-job timeout, memory and CPU caps are validated against server maxima.
+- Network is disabled by default; it can be enabled only per job.
+- Containers use `read_only`, `cap_drop=ALL`, `no-new-privileges`, tmpfs, PID limits and automatic cleanup.
+- Workspace files are hash-verified and ownership is corrected for the non-root runner.
+- Cancellation removes the running container immediately.
+- Admission still blocks unapproved, unlicensed or security-flagged packages.
+
+## 17. Compatibility
 
 Existing skill search, retrieval, version listing, resource download, REST
 API, MCP search/get tools and CLI workflows remain unchanged. The new tools
