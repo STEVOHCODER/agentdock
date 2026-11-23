@@ -24,8 +24,9 @@ from redis.asyncio import Redis
 from starlette.concurrency import run_in_threadpool
 
 from .config import get_settings
-from .common import (create_email_token, entitlement_summary, enrich_skill, listing_for_skill,
-                     premium_entitlement, public_base_url, record_usage, review_stats)
+from .common import (create_email_token, entitlement_summary, enrich_skill, execution_quota_summary,
+                     listing_for_skill, premium_entitlement, public_base_url, record_usage, review_stats,
+                     team_role)
 from .db import Base, SessionLocal, engine
 from .github import parse_repo_url
 from .models import (APIKey, AdmissionDecision, AuditLog, Collection, CollectionItem, ExecutionJob, ImportBatch,
@@ -702,12 +703,21 @@ def skill_resource(identifier: str, resource_path: str, request: Request, versio
     return RawResponse(content, media_type="text/plain; charset=utf-8", headers={"ETag": f'"{hashlib.sha256(content).hexdigest()}"'})
 
 
+def _can_access_execution(db: Session, user: User, job: ExecutionJob) -> bool:
+    return job.user_id == user.id or bool(job.team_id and team_role(db, job.team_id, user.id))
+
+
 def _execution_job_data(job: ExecutionJob) -> dict:
     return {
-        "id": job.id, "skill_id": job.skill_id, "version": job.version,
+        "id": job.id, "skill_id": job.skill_id, "team_id": job.team_id, "version": job.version,
         "version_hash": job.version_hash, "command": job.command, "arguments": job.arguments,
         "status": job.status, "stdout": job.stdout, "stderr": job.stderr,
         "error": job.error, "exit_code": job.exit_code, "sandbox": job.sandbox,
+        "dependencies": job.dependencies or {},
+        "limits": {"timeout_seconds": job.timeout_seconds, "max_memory_mb": job.max_memory_mb,
+                   "max_cpu_millicores": job.max_cpu_millicores, "network_enabled": bool(job.network_enabled)},
+        "metrics": {"duration_ms": job.duration_ms, "peak_memory_bytes": job.peak_memory_bytes,
+                    "cpu_time_ms": job.cpu_time_ms, "resource_stats": job.resource_stats or {}},
         "created_at": job.created_at, "started_at": job.started_at, "completed_at": job.completed_at,
     }
 
@@ -794,31 +804,59 @@ def create_execution(payload: ExecutionInput, request: Request, db: Session = De
         execution_routes.assert_execution_allowed(package["skill"])
     except execution_routes.ExecutionError as error:
         raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
+    script = execution_routes.normalize_package_path(
+        package, payload.arguments[0] if payload.arguments else "")
     manifest_paths = {entry["path"] for entry in package["manifest"]}
-    script = execution_routes.normalize_package_path(package, payload.arguments[0] if payload.arguments else "")
     if not script or script not in manifest_paths:
         raise HTTPException(status_code=422, detail="arguments[0] must be a script path from the approved package")
-    arguments = [script, *payload.arguments[1:]]
+    try:
+        runtime = execution_routes.resolve_runtime(payload.command, script)
+    except execution_routes.ExecutionError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    quota = execution_quota_summary(db, user, payload.team_id)
+    if quota["remaining"] <= 0:
+        raise HTTPException(status_code=429, detail=f"Daily execution quota reached ({quota['limit']})")
+    timeout = min(max(payload.timeout_seconds or settings.execution_timeout_seconds, 1),
+                  settings.execution_max_timeout_seconds)
+    memory_mb = min(max(payload.max_memory_mb or settings.execution_max_memory_mb, 64),
+                    settings.execution_max_memory_mb)
+    cpu_millicores = min(max(payload.max_cpu_millicores or 1000, 100), 4000)
+    deps = execution_routes.detect_dependencies(package["manifest"], package["version"].snapshot_path)
     job = ExecutionJob(
         user_id=user.id, team_id=payload.team_id, skill_id=package["skill"].id,
         version=package["version"].version, version_hash=package["version"].content_hash,
-        command=payload.command, arguments=arguments, status="queued",
+        command=runtime, arguments=[script, *payload.arguments[1:]], status="queued",
+        timeout_seconds=timeout, max_memory_mb=memory_mb, max_cpu_millicores=cpu_millicores,
+        network_enabled=bool(payload.network), dependencies=deps,
     )
     db.add(job)
-    record_usage(db, user, None, "execution.requested", source="api",
+    record_usage(db, user, None, "execution.requested", source="api", team_id=payload.team_id,
                  details={"skill_id": package["skill"].id, "version": package["version"].version,
-                          "script": script})
+                          "script": script, "runtime": runtime})
     db.commit()
     return _execution_job_data(job)
 
 
 @app.get("/api/v1/executions")
-def list_executions(request: Request, limit: int = 20, offset: int = 0, db: Session = Depends(db_session)):
+def list_executions(request: Request, limit: int = 20, offset: int = 0, status: str | None = None,
+                    skill: str | None = None, team_id: str | None = None,
+                    db: Session = Depends(db_session)):
     user = current_user(request, db)
     require_scope(request, "execution:run")
-    rows = db.scalars(select(ExecutionJob).where(ExecutionJob.user_id == user.id)
-                      .order_by(ExecutionJob.created_at.desc()).offset(max(0, offset)).limit(min(max(limit, 1), 100))).all()
-    return {"items": [_execution_job_data(row) for row in rows]}
+    team_ids = db.scalars(select(TeamMember.team_id).where(TeamMember.user_id == user.id)).all()
+    statement = select(ExecutionJob).where(or_(ExecutionJob.user_id == user.id,
+                                               ExecutionJob.team_id.in_(team_ids) if team_ids else False))
+    if status:
+        statement = statement.where(ExecutionJob.status == status)
+    if team_id:
+        statement = statement.where(ExecutionJob.team_id == team_id)
+    if skill:
+        statement = statement.where(ExecutionJob.skill_id == skill)
+    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    rows = db.scalars(statement.order_by(ExecutionJob.created_at.desc())
+                      .offset(max(0, offset)).limit(min(max(limit, 1), 100))).all()
+    return {"items": [_execution_job_data(row) for row in rows], "total": total,
+            "limit": limit, "offset": offset}
 
 
 @app.get("/api/v1/executions/{job_id}")
@@ -826,7 +864,7 @@ def get_execution(job_id: str, request: Request, db: Session = Depends(db_sessio
     user = current_user(request, db)
     require_scope(request, "execution:run")
     job = db.get(ExecutionJob, job_id)
-    if not job or job.user_id != user.id:
+    if not job or not _can_access_execution(db, user, job):
         raise HTTPException(status_code=404, detail="Execution not found")
     return _execution_job_data(job)
 
@@ -836,7 +874,7 @@ def cancel_execution(job_id: str, request: Request, db: Session = Depends(db_ses
     user = current_user(request, db)
     require_scope(request, "execution:run")
     job = db.get(ExecutionJob, job_id)
-    if not job or job.user_id != user.id:
+    if not job or not _can_access_execution(db, user, job):
         raise HTTPException(status_code=404, detail="Execution not found")
     if job.status in {"succeeded", "failed", "canceled"}:
         raise HTTPException(status_code=409, detail="Execution is already finished")
@@ -1351,6 +1389,10 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
     elif name == "execute_skill_script":
         if not settings.execution_enabled:
             raise HTTPException(status_code=503, detail="Skill execution is disabled on this deployment")
+        team_id = args.get("team_id") or None
+        if team_id and not db.scalar(select(TeamMember.id).where(
+                TeamMember.team_id == team_id, TeamMember.user_id == user.id)):
+            raise HTTPException(status_code=403, detail="You are not a member of that team")
         try:
             package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None, user)
             execution_routes.assert_execution_allowed(package["skill"])
@@ -1361,28 +1403,43 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
         if not script or script not in manifest_paths:
             raise HTTPException(status_code=422, detail="script must be a file from the approved package")
         command = str(args.get("command", "python3"))
-        if Path(command).name not in {"python", "python3"}:
-            raise HTTPException(status_code=422, detail="Only python3 execution is supported")
+        try:
+            command = execution_routes.resolve_runtime(command, script)
+        except execution_routes.ExecutionError as error:
+            raise HTTPException(status_code=422, detail=str(error))
         extra = args.get("arguments") or []
         if not isinstance(extra, list) or any(not isinstance(item, str) for item in extra):
             raise HTTPException(status_code=422, detail="arguments must be a list of strings")
+        quota = execution_quota_summary(db, user, team_id)
+        if quota["remaining"] <= 0:
+            raise HTTPException(status_code=429, detail=f"Daily execution quota reached ({quota['limit']})")
+        timeout = min(max(int(args.get("timeout_seconds") or settings.execution_timeout_seconds), 1),
+                      settings.execution_max_timeout_seconds)
+        memory_mb = min(max(int(args.get("max_memory_mb") or settings.execution_max_memory_mb), 64),
+                        settings.execution_max_memory_mb)
+        cpu_millicores = min(max(int(args.get("max_cpu_millicores") or 1000), 100), 4000)
+        deps = execution_routes.detect_dependencies(package["manifest"], package["version"].snapshot_path)
         job = ExecutionJob(
-            user_id=user.id, skill_id=package["skill"].id, version=package["version"].version,
-            version_hash=package["version"].content_hash, command=command,
-            arguments=[script, *extra], status="queued")
+            user_id=user.id, team_id=team_id, skill_id=package["skill"].id,
+            version=package["version"].version, version_hash=package["version"].content_hash,
+            command=command, arguments=[script, *extra], status="queued",
+            timeout_seconds=timeout, max_memory_mb=memory_mb, max_cpu_millicores=cpu_millicores,
+            network_enabled=bool(args.get("network", False)), dependencies=deps,
+        )
         db.add(job)
-        record_usage(db, user, None, "execution.requested", "mcp",
-                     details={"skill_id": package["skill"].id, "version": package["version"].version, "script": script})
+        record_usage(db, user, None, "execution.requested", "mcp", team_id=team_id,
+                     details={"skill_id": package["skill"].id, "version": package["version"].version,
+                              "script": script, "runtime": command})
         db.commit()
         data = _execution_job_data(job)
     elif name in {"get_execution_status", "retrieve_execution_result"}:
         job = db.get(ExecutionJob, str(args.get("job_id", "")))
-        if not job or job.user_id != user.id:
+        if not job or not _can_access_execution(db, user, job):
             raise HTTPException(status_code=404, detail="Execution not found")
         data = _execution_job_data(job)
     elif name == "cancel_execution":
         job = db.get(ExecutionJob, str(args.get("job_id", "")))
-        if not job or job.user_id != user.id:
+        if not job or not _can_access_execution(db, user, job):
             raise HTTPException(status_code=404, detail="Execution not found")
         if job.status in {"succeeded", "failed", "canceled"}:
             raise HTTPException(status_code=409, detail="Execution is already finished")
@@ -1421,7 +1478,7 @@ MCP_TOOLS = [
     {"name": "resolve_skill_package", "description": "Resolve a complete immutable skill package from SkillVault with grouped files and static dependency analysis.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "version": {"type": "string"}}, "required": ["id"]}},
     {"name": "list_skill_files", "description": "List every file in an immutable skill package with SHA-256 hashes and relative paths.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "version": {"type": "string"}}, "required": ["id"]}},
     {"name": "retrieve_skill_file", "description": "Retrieve one exact file from an immutable SkillVault snapshot, base64 encoded.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "path": {"type": "string"}, "version": {"type": "string"}}, "required": ["id", "path"]}},
-    {"name": "execute_skill_script", "description": "Execute an approved script in an isolated temporary workspace with no network access. Returns a job id.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "script": {"type": "string"}, "version": {"type": "string"}, "command": {"type": "string"}, "arguments": {"type": "array", "items": {"type": "string"}}}, "required": ["id", "script"]}},
+    {"name": "execute_skill_script", "description": "Execute an approved Python, Node.js or shell script in an isolated temporary workspace. Returns a job id.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "script": {"type": "string"}, "version": {"type": "string"}, "command": {"type": "string", "description": "python3, node or bash"}, "arguments": {"type": "array", "items": {"type": "string"}}, "team_id": {"type": "string"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 600}, "max_memory_mb": {"type": "integer", "minimum": 64, "maximum": 4096}, "max_cpu_millicores": {"type": "integer", "minimum": 100, "maximum": 4000}, "network": {"type": "boolean"}}, "required": ["id", "script"]}},
     {"name": "get_execution_status", "description": "Get the status of an execution job.", "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}},
     {"name": "retrieve_execution_result", "description": "Retrieve stdout, stderr and exit code for a finished execution job.", "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}},
     {"name": "cancel_execution", "description": "Cancel a queued or running execution job.", "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string"}}, "required": ["job_id"]}},

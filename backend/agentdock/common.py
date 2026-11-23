@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from .admission import REDISTRIBUTION_LICENSES
 from .config import get_settings
-from .models import (AuditLog, Collection, CollectionItem, EmailToken, MarketplaceListing, Notification, Purchase,
-                     Review, Skill, SkillVersion, Subscription, SubscriptionPlan, Team, TeamMember, UsageEvent,
+from .models import (AuditLog, Collection, CollectionItem, EmailToken, ExecutionJob, MarketplaceListing, Notification,
+                     Purchase, Review, Skill, SkillVersion, Subscription, SubscriptionPlan, Team, TeamMember, UsageEvent,
                      User, utcnow)
 from .security import hash_token
 
@@ -227,11 +227,26 @@ def entitlement_summary(db: Session, user: User, team_id: str | None = None) -> 
         "current_period_end": subscription.current_period_end if subscription else None,
         "cancel_at_period_end": subscription.cancel_at_period_end if subscription else False,
         "features": plan.features or [], "member_limit": plan.member_limit,
+        "execution_quota": execution_quota_summary(db, user, team_id),
         "teams": teams, "premium_entitlements": [
             purchase.listing_id for purchase in db.scalars(select(Purchase).where(
                 Purchase.user_id == user.id, Purchase.status == "paid")).all()
         ],
     }
+
+
+def execution_quota_summary(db: Session, user: User, team_id: str | None = None) -> dict:
+    plan, _subscription = user_plan(db, user, team_id)
+    start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    statement = select(func.count(ExecutionJob.id)).where(ExecutionJob.created_at >= start)
+    if team_id:
+        statement = statement.where(ExecutionJob.team_id == team_id)
+    else:
+        statement = statement.where(ExecutionJob.user_id == user.id, ExecutionJob.team_id.is_(None))
+    used = db.scalar(statement) or 0
+    limit = plan.execution_quota or get_settings().execution_default_daily_quota
+    return {"plan_code": plan.code, "limit": limit, "used": used,
+            "remaining": max(0, limit - used), "scope": "team" if team_id else "user"}
 
 
 def premium_entitlement(db: Session, user: User, skill: Skill) -> bool:

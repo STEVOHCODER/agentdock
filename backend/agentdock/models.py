@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import (Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text,
+from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text,
                         UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -178,6 +178,15 @@ class ExecutionJob(Base):
     pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     runner_id: Mapped[str] = mapped_column(String(120), default="", index=True)
     sandbox: Mapped[str] = mapped_column(String(64), default="bubblewrap")
+    dependencies: Mapped[dict] = mapped_column(JSON, default=dict)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=120)
+    max_memory_mb: Mapped[int] = mapped_column(Integer, default=1024)
+    max_cpu_millicores: Mapped[int] = mapped_column(Integer, default=1000)
+    network_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    peak_memory_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cpu_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resource_stats: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -273,6 +282,7 @@ class SubscriptionPlan(Base):
     annual_price_cents: Mapped[int] = mapped_column(Integer, default=0)
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     member_limit: Mapped[int] = mapped_column(Integer, default=1)
+    execution_quota: Mapped[int] = mapped_column(Integer, default=20)
     features: Mapped[list] = mapped_column(JSON, default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)

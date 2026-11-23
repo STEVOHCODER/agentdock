@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     execution_driver: str = Field(default="bubblewrap", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_DRIVER"))
     execution_host_workspace_root: str = Field(default="/opt/agentdock/exec-workspaces", validation_alias=AliasChoices("AGENTDOCK_EXEC_HOST_WORKSPACE_ROOT"))
     execution_image: str = Field(default="python:3.13-slim", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_IMAGE"))
+    execution_runtimes: str = Field(default="python3,python,node,nodejs,bash,sh", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_RUNTIMES"))
+    execution_allow_dependency_network: bool = Field(default=True, validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOW_DEPENDENCY_NETWORK"))
+    execution_allow_unlocked_dependencies: bool = Field(default=False, validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOW_UNLOCKED_DEPS"))
+    execution_max_timeout_seconds: int = Field(default=600, validation_alias=AliasChoices("AGENTDOCK_EXEC_MAX_TIMEOUT_SECONDS"))
+    execution_default_daily_quota: int = Field(default=20, validation_alias=AliasChoices("AGENTDOCK_EXEC_DEFAULT_DAILY_QUOTA"))
 
     # Payments. "manual" is a real invoice workflow: an administrator records the
     # payment before entitlement is granted. Paddle/Flutterwave/UrubutoPay activate
@@ -114,6 +119,10 @@ class Settings(BaseSettings):
     @property
     def first_party_owner_list(self) -> list[str]:
         return [item.strip().lower() for item in self.first_party_owners.split(",") if item.strip()]
+
+    @property
+    def execution_runtime_set(self) -> set[str]:
+        return {item.strip().lower() for item in self.execution_runtimes.split(",") if item.strip()}
 
     @property
     def execution_allowed_skill_list(self) -> set[str]:

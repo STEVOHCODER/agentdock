@@ -178,11 +178,18 @@ def process_execution_once() -> bool:
                 current.error = result["error"]
                 current.exit_code = result["exit_code"]
                 current.completed_at = utcnow()
+                current.dependencies = result.get("dependency_install") or current.dependencies or {}
+                current.duration_ms = result.get("duration_ms")
+                current.peak_memory_bytes = result.get("peak_memory_bytes")
+                current.cpu_time_ms = result.get("cpu_time_ms")
+                current.resource_stats = result.get("resource_stats") or {}
                 update_db.add(AuditLog(
                     actor_id=current.user_id, action="skill.executed", target_type="skill",
                     target_id=current.skill_id,
                     details={"job_id": job_id, "version": current.version, "exit_code": current.exit_code,
-                             "files_verified": result.get("files_verified", 0)},
+                             "files_verified": result.get("files_verified", 0),
+                             "duration_ms": current.duration_ms,
+                             "runtime": current.command},
                 ))
                 update_db.commit()
             logger.info("execution %s finished: %s", job_id, result["status"])

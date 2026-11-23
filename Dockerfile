@@ -10,7 +10,8 @@ FROM python:3.13-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 # bubblewrap provides per-execution network/filesystem isolation for approved skill scripts.
-RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap \
+# Node.js is included so approved skills can use Python, Node and shell runtimes.
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml requirements.txt ./
 COPY backend ./backend

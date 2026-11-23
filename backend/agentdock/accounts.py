@@ -117,7 +117,7 @@ def public_plans(db: Session = Depends(db_session_dependency)):
                        .order_by(SubscriptionPlan.sort_order, SubscriptionPlan.price_cents)).all()
     return {"items": [{"code": p.code, "name": p.name, "description": p.description,
                        "price_cents": p.price_cents, "annual_price_cents": p.annual_price_cents,
-                       "currency": p.currency, "member_limit": p.member_limit, "features": p.features} for p in plans],
+                       "currency": p.currency, "member_limit": p.member_limit, "execution_quota": p.execution_quota, "features": p.features} for p in plans],
             "billing": billing.provider_status(), "providers": billing.all_providers()}
 
 

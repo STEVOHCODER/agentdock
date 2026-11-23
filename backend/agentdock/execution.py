@@ -14,6 +14,8 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
+import tomllib
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
@@ -25,6 +27,16 @@ from .models import ExecutionJob, Skill, SkillVersion, utcnow
 from .vault import read_resource, safe_relative_path
 
 PAYTHON = sys.executable
+
+RUNTIME_ALIASES = {
+    "python": "python3", "python3": "python3",
+    "node": "node", "nodejs": "node",
+    "bash": "bash", "sh": "sh",
+}
+SCRIPT_RUNTIMES = {
+    ".py": "python3", ".js": "node", ".mjs": "node", ".cjs": "node",
+    ".sh": "bash", ".bash": "bash",
+}
 
 
 class ExecutionError(RuntimeError):
@@ -106,6 +118,80 @@ def normalize_package_path(package: dict, path: str) -> str:
     return path
 
 
+def resolve_runtime(command: str, script: str) -> str:
+    settings = get_settings()
+    allowed = settings.execution_runtime_set
+    runtime = RUNTIME_ALIASES.get((command or "").strip().lower())
+    if not runtime or runtime not in allowed:
+        raise ExecutionError(f"Runtime is not approved: {command}")
+    extension = PurePosixPath(script).suffix.lower()
+    expected = SCRIPT_RUNTIMES.get(extension)
+    if expected and expected != runtime:
+        raise ExecutionError(f"Script type {extension} requires {expected}, not {runtime}")
+    return runtime
+
+
+def detect_dependencies(manifest: list[dict], snapshot_path: str) -> dict:
+    """Read lock/manifest files and build a reproducible dependency plan."""
+    names = {PurePosixPath(entry.get("path", "")).name: entry["path"] for entry in manifest}
+    found = {}
+    for name in ["requirements.lock.txt", "requirements.txt", "pyproject.toml", "poetry.lock",
+                 "Pipfile.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "package.json"]:
+        if name in names:
+            found[name] = names[name]
+
+    packages: list[str] = []
+    if "requirements.lock.txt" in found or "requirements.txt" in found:
+        path = found.get("requirements.lock.txt") or found["requirements.txt"]
+        for line in read_resource(snapshot_path, path).decode("utf-8", "replace").splitlines():
+            line = line.strip()
+            if line and not line.startswith(("#", "-")):
+                packages.append(line)
+    if "pyproject.toml" in found:
+        try:
+            data = tomllib.loads(read_resource(snapshot_path, found["pyproject.toml"]).decode("utf-8", "replace"))
+            packages.extend(data.get("project", {}).get("dependencies", []) or [])
+        except Exception:
+            pass
+    if "package.json" in found:
+        try:
+            data = json.loads(read_resource(snapshot_path, found["package.json"]).decode("utf-8", "replace"))
+            for section in ("dependencies", "devDependencies"):
+                packages.extend(f"{name}@{version}" for name, version in (data.get(section) or {}).items())
+        except Exception:
+            pass
+
+    has_python = any(name.endswith((".txt", ".toml", ".lock")) for name in found)
+    has_node = any(name in {"package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml"} for name in found)
+    lock_names = {"requirements.lock.txt", "poetry.lock", "Pipfile.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml"}
+    locked = bool(lock_names & set(found)) or not packages
+    install_commands = []
+    if has_python:
+        req = found.get("requirements.lock.txt") or found.get("requirements.txt")
+        if req:
+            install_commands.append(f"pip install --no-cache-dir --target /workspace/.deps -r /workspace/{req}")
+        elif "pyproject.toml" in found:
+            install_commands.append("pip install --no-cache-dir --target /workspace/.deps /workspace")
+    if has_node:
+        if "package-lock.json" in found:
+            install_commands.append("npm ci --ignore-scripts --no-audit --no-fund")
+        elif "yarn.lock" in found:
+            install_commands.append("yarn install --frozen-lockfile --ignore-scripts")
+        elif "pnpm-lock.yaml" in found:
+            install_commands.append("pnpm install --frozen-lockfile --ignore-scripts")
+        else:
+            install_commands.append("npm install --ignore-scripts --no-audit --no-fund")
+    return {
+        "detected": bool(packages or install_commands),
+        "locked": locked,
+        "runtimes": [name for name, enabled in (("python", has_python), ("node", has_node)) if enabled],
+        "files": found,
+        "packages": sorted(set(packages))[:200],
+        "install_commands": install_commands,
+        "notes": "Locked dependency plan" if locked else "Unlocked dependency plan; install requires explicit operator approval.",
+    }
+
+
 def verify_snapshot(snapshot_path: str, manifest: list[dict]) -> int:
     verified = 0
     for entry in manifest:
@@ -148,6 +234,7 @@ def detect_requirements(manifest: list[dict], snapshot_path: str) -> dict:
         "datasets": sorted(datasets),
         "python_imports": sorted(imports),
         "external_dependencies": external,
+        "dependencies": detect_dependencies(manifest, snapshot_path),
         "notes": "Static analysis only. Missing runtime dependencies are reported at execution time." if external else "No external Python dependencies detected.",
     }
 
@@ -171,19 +258,17 @@ def _limits() -> tuple[int, int]:
 
 
 def build_sandbox_command(workspace: Path, argv: list[str]) -> list[str]:
-    if not argv:
-        raise ExecutionError("No command supplied")
-    executable = Path(argv[0]).name
-    if executable not in {"python", "python3", sys.executable and Path(sys.executable).name}:
-        raise ExecutionError("Only Python commands are permitted")
-    script = argv[1] if len(argv) > 1 else ""
+    if len(argv) < 2:
+        raise ExecutionError("An interpreter and a script path are required")
+    runtime = resolve_runtime(argv[0], argv[1])
+    script = argv[1]
     if not script or ".." in script or PurePosixPath(script).is_absolute():
         raise ExecutionError("A relative script path inside the package is required")
     script_path = workspace / script
     if not script_path.exists() or workspace not in script_path.resolve().parents:
         raise ExecutionError("Script is not part of the approved package")
-    python = "python3"
-    command = [python, *argv[1:]]
+    interpreter = "python3" if runtime == "python3" else runtime
+    command = [interpreter, *argv[1:]]
     settings = get_settings()
     bwrap = shutil.which("bwrap")
     if settings.execution_require_bubblewrap and not bwrap:
@@ -224,32 +309,87 @@ def _preexec(memory_bytes: int, cpu_seconds: int):
     return apply
 
 
+def _bootstrap_dependencies(client, settings, host_workspace: Path, deps: dict,
+                           memory_bytes: int, cpu_millicores: int) -> dict:
+    commands = deps.get("install_commands") or []
+    if not commands:
+        return {"installed": False, "locked": deps.get("locked", True), "commands": []}
+    if not deps.get("locked") and not settings.execution_allow_unlocked_dependencies:
+        raise ExecutionError("Dependency files are not locked; set AGENTDOCK_EXEC_ALLOW_UNLOCKED_DEPS=true to allow")
+    if not settings.execution_allow_dependency_network:
+        raise ExecutionError("Dependency installation requires network; AGENTDOCK_EXEC_ALLOW_DEPENDENCY_NETWORK=false")
+    container = client.containers.run(
+        settings.execution_image,
+        command=["sh", "-c", " && ".join(commands)],
+        volumes={str(host_workspace): {"bind": "/workspace", "mode": "rw"}},
+        working_dir="/workspace",
+        environment={"HOME": "/tmp", "LANG": "C.UTF-8", "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+                     "NPM_CONFIG_CACHE": "/tmp/npm"},
+        network_disabled=False,
+        read_only=True,
+        tmpfs={"/tmp": "rw,size=256m,nosuid,nodev"},
+        mem_limit=memory_bytes,
+        nano_cpus=cpu_millicores * 1_000_000,
+        cap_drop=["ALL"],
+        security_opt=["no-new-privileges:true"],
+        pids_limit=128,
+        detach=True,
+        auto_remove=False,
+        stdout=True,
+        stderr=True,
+    )
+    try:
+        result = container.wait(timeout=min(300, settings.execution_max_timeout_seconds))
+        exit_code = int(result.get("StatusCode", -1))
+        if exit_code != 0:
+            stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
+            raise ExecutionError(f"Dependency installation failed: {stderr[-500:]}")
+        return {"installed": True, "locked": bool(deps.get("locked")),
+                "commands": commands, "packages": deps.get("packages", [])}
+    finally:
+        try:
+            container.remove(force=True)
+        except Exception:
+            pass
+
+
 def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[str],
-                   timeout: int, memory_bytes: int) -> dict:
+                   timeout: int, memory_bytes: int, cpu_millicores: int,
+                   network_enabled: bool, deps: dict) -> dict:
     import docker
 
     settings = get_settings()
     client = docker.from_env()
     host_workspace = Path(settings.execution_host_workspace_root) / workspace.name
+    runtime = resolve_runtime(argv[0], argv[1])
     script = argv[1]
     if not script or ".." in script or PurePosixPath(script).is_absolute():
         raise ExecutionError("A relative script path inside the package is required")
     script_path = workspace / script
     if not script_path.exists() or workspace not in script_path.resolve().parents:
         raise ExecutionError("Script is not part of the approved package")
-    command = ["python3", *argv[1:]]
+    bootstrap = _bootstrap_dependencies(client, settings, host_workspace, deps, memory_bytes, cpu_millicores)
+    interpreter = "python3" if runtime == "python3" else runtime
+    command = [interpreter, *argv[1:]]
+    environment = {"HOME": "/tmp", "LANG": "C.UTF-8", "PYTHONIOENCODING": "utf-8",
+                   "PYTHONDONTWRITEBYTECODE": "1"}
+    if bootstrap.get("installed"):
+        if "python" in deps.get("runtimes", []):
+            environment["PYTHONPATH"] = "/workspace/.deps"
+        if "node" in deps.get("runtimes", []):
+            environment["NODE_PATH"] = "/workspace/node_modules"
+    started = time.monotonic()
     container = client.containers.run(
         settings.execution_image,
         command=command,
         volumes={str(host_workspace): {"bind": "/workspace", "mode": "rw"}},
         working_dir="/workspace",
-        environment={"HOME": "/tmp", "LANG": "C.UTF-8", "PYTHONIOENCODING": "utf-8",
-                     "PYTHONDONTWRITEBYTECODE": "1"},
-        network_disabled=True,
+        environment=environment,
+        network_disabled=not network_enabled,
         read_only=True,
         tmpfs={"/tmp": "rw,size=64m,nosuid,nodev"},
         mem_limit=memory_bytes,
-        nano_cpus=1_000_000_000,
+        nano_cpus=cpu_millicores * 1_000_000,
         cap_drop=["ALL"],
         security_opt=["no-new-privileges:true"],
         pids_limit=64,
@@ -264,6 +404,7 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
     job.started_at = utcnow()
     job.completed_at = None
     db.commit()
+    stats = {}
     try:
         try:
             result = container.wait(timeout=timeout)
@@ -273,13 +414,24 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
                 container.kill()
                 raise ExecutionError(f"Execution timed out after {timeout} seconds")
             raise
+        try:
+            stats = container.stats(stream=False) or {}
+        except Exception:
+            stats = {}
         stdout = container.logs(stdout=True, stderr=False).decode("utf-8", "replace")
         stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
         limit = settings.execution_max_output_bytes
+        memory = (stats.get("memory_stats") or {}).get("max_usage") or (stats.get("memory_stats") or {}).get("usage") or 0
+        cpu_total = ((stats.get("cpu_stats") or {}).get("cpu_usage") or {}).get("total_usage") or 0
         return {
             "status": "succeeded" if exit_code == 0 else "failed",
             "exit_code": exit_code, "stdout": stdout[:limit], "stderr": stderr[:limit],
             "error": "", "files_verified": 0, "workspace": str(workspace),
+            "duration_ms": int((time.monotonic() - started) * 1000),
+            "peak_memory_bytes": int(memory), "cpu_time_ms": int(cpu_total / 1_000_000),
+            "resource_stats": {"memory_stats": stats.get("memory_stats", {}),
+                               "cpu_stats": stats.get("cpu_stats", {})},
+            "dependency_install": bootstrap,
         }
     finally:
         try:
@@ -303,7 +455,17 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
             raise ExecutionError("Execution job no longer exists")
         package = resolve_package(db, job.skill_id, job.version)
         assert_execution_allowed(package["skill"])
-        timeout, memory_bytes = _limits()
+        defaults = _limits()
+        timeout = min(max(job.timeout_seconds or defaults[0], 1), settings.execution_max_timeout_seconds)
+        memory_bytes = min(max(job.max_memory_mb or defaults[1] // (1024 * 1024), 64),
+                           settings.execution_max_memory_mb) * 1024 * 1024
+        cpu_millicores = min(max(job.max_cpu_millicores or 1000, 100), 4000)
+        deps = detect_dependencies(package["manifest"], package["version"].snapshot_path)
+        job.dependencies = deps
+        job.timeout_seconds = timeout
+        job.max_memory_mb = memory_bytes // (1024 * 1024)
+        job.max_cpu_millicores = cpu_millicores
+        db.commit()
         verified = verify_snapshot(package["version"].snapshot_path, package["manifest"])
         if progress:
             progress(f"verified {verified} immutable files")
@@ -317,11 +479,14 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
             argv = [job.command, *job.arguments]
             if len(argv) > 1:
                 argv[1] = package["workspace_path"].rstrip("/") + "/" + normalize_package_path(package, argv[1])
+            resolve_runtime(argv[0], argv[1])
             if settings.execution_driver == "docker":
-                result = _run_in_docker(job, db, workspace, argv, timeout, memory_bytes)
+                result = _run_in_docker(job, db, workspace, argv, timeout, memory_bytes,
+                                        cpu_millicores, bool(job.network_enabled), deps)
                 result["files_verified"] = files
                 return result
             sandbox_command = build_sandbox_command(workspace, argv)
+            started = time.monotonic()
             process = subprocess.Popen(
                 sandbox_command,
                 cwd=str(workspace),
@@ -355,6 +520,11 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
                 "error": "",
                 "files_verified": files,
                 "workspace": str(workspace),
+                "duration_ms": int((time.monotonic() - started) * 1000),
+                "peak_memory_bytes": 0, "cpu_time_ms": 0,
+                "resource_stats": {"driver": "bubblewrap"},
+                "dependency_install": {"installed": False, "locked": deps.get("locked", True),
+                                       "commands": deps.get("install_commands", [])},
             }
             return result
         except Exception:

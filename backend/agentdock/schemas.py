@@ -16,13 +16,10 @@ class ExecutionInput(BaseModel):
     command: str = Field(default="python3", max_length=64)
     arguments: list[str] = Field(default_factory=list, max_length=64)
     team_id: str | None = Field(default=None, max_length=36)
-
-    @field_validator("command")
-    @classmethod
-    def valid_command(cls, value: str) -> str:
-        if Path(value).name not in {"python", "python3"}:
-            raise ValueError("Only python3 execution is supported")
-        return value
+    timeout_seconds: int | None = Field(default=None, ge=1, le=600)
+    max_memory_mb: int | None = Field(default=None, ge=64, le=4096)
+    max_cpu_millicores: int | None = Field(default=None, ge=100, le=4000)
+    network: bool = False
 
 
 class RegisterInput(BaseModel):
@@ -276,6 +273,7 @@ class PlanInput(BaseModel):
     annual_price_cents: int = Field(default=0, ge=0, le=100_000_000)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     member_limit: int = Field(default=1, ge=1, le=1000)
+    execution_quota: int = Field(default=20, ge=0, le=1_000_000)
     features: list[str] = Field(default_factory=list, max_length=30)
     is_active: bool = True
     sort_order: int = 0

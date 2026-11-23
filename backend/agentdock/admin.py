@@ -337,6 +337,7 @@ def admin_plans(request: Request, db: Session = Depends(db_session_dependency)):
     return {"items": [{"code": plan.code, "name": plan.name, "description": plan.description,
                        "price_cents": plan.price_cents, "annual_price_cents": plan.annual_price_cents,
                        "currency": plan.currency, "member_limit": plan.member_limit,
+                       "execution_quota": plan.execution_quota,
                        "features": plan.features, "is_active": plan.is_active,
                        "sort_order": plan.sort_order} for plan in plans]}
 

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import io
+import json
 import zipfile
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
@@ -11,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.agentdock import ingest, main, vault
+from backend.agentdock import execution, ingest, main, vault
 from backend.agentdock.db import Base
 from backend.agentdock.models import (APIKey, ExecutionJob, ImportBatch, MarketplaceListing, Payment, Repository,
                                       RightsRequest, Skill, SkillVersion, SubscriptionPlan,
@@ -924,3 +925,33 @@ def test_synchronized_skill_auto_approval_policy(monkeypatch):
     assert ingest.synchronized_skill_status(skill, evaluation, unreviewed_repo) == "qualified"
     low_score = SimpleNamespace(**{**evaluation.__dict__, "status": "pending_review"})
     assert ingest.synchronized_skill_status(skill, low_score, repository) == "approved"
+
+
+def test_generic_runtimes_and_dependency_detection(clients):
+    assert execution.resolve_runtime("python", "scripts/main.py") == "python3"
+    assert execution.resolve_runtime("node", "scripts/main.js") == "node"
+    assert execution.resolve_runtime("bash", "scripts/main.sh") == "bash"
+    with pytest.raises(execution.ExecutionError):
+        execution.resolve_runtime("ruby", "scripts/main.rb")
+    with pytest.raises(execution.ExecutionError):
+        execution.resolve_runtime("python3", "scripts/main.js")
+
+    _, _, TestSession = clients
+    db = TestSession()
+    skill = Skill(slug="qa-deps-skill", name="qa-deps-skill", status="approved",
+                  security_status="clear", latest_version="git-deps1")
+    db.add(skill); db.flush()
+    snapshot, digest, manifest = save_snapshot(skill.id, "git-deps1", {
+        "SKILL.md": b"---\nname: qa-deps-skill\n---\n",
+        "scripts/main.js": b"console.log('ok')",
+        "package.json": json.dumps({"dependencies": {"left-pad": "1.3.0"}}).encode(),
+        "package-lock.json": b'{"lockfileVersion":3}',
+    })
+    db.add(SkillVersion(skill_id=skill.id, version="git-deps1", content_hash=digest,
+                        manifest=manifest, snapshot_path=snapshot))
+    db.commit(); db.close()
+    deps = execution.detect_dependencies(manifest, snapshot)
+    assert deps["locked"] is True
+    assert "node" in deps["runtimes"]
+    assert any("npm ci" in command for command in deps["install_commands"])
+    assert any("left-pad" in package for package in deps["packages"])

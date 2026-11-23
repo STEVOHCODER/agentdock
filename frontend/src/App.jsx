@@ -1739,14 +1739,30 @@ function UsagePage({ navigate, onSelect }) {
 
 function ExecutionConsole({ navigate, notify }) {
   const skills = useLoad(() => get('/api/v1/skills/search?limit=50'), [])
+  const entitlements = useLoad(() => get('/api/v1/account/entitlements'), [])
   const [skill, setSkill] = useState('')
   const [packageData, setPackageData] = useState(null)
   const [script, setScript] = useState('')
+  const [runtime, setRuntime] = useState('python3')
   const [args, setArgs] = useState('')
+  const [timeoutSeconds, setTimeoutSeconds] = useState(120)
+  const [memoryMb, setMemoryMb] = useState(1024)
+  const [cpuMillicores, setCpuMillicores] = useState(1000)
+  const [network, setNetwork] = useState(false)
+  const [teamId, setTeamId] = useState('')
   const [job, setJob] = useState(null)
   const [busy, setBusy] = useState(false)
   const [loadingPackage, setLoadingPackage] = useState(false)
   const [fileFilter, setFileFilter] = useState('')
+  const [historyPage, setHistoryPage] = useState(0)
+  const [statusFilter, setStatusFilter] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const history = useLoad(() => {
+    const params = new URLSearchParams({ limit: '20', offset: String(historyPage * 20) })
+    if (statusFilter) params.set('status', statusFilter)
+    return get(`/api/v1/executions?${params}`)
+  }, [historyPage, statusFilter, refreshKey])
 
   const loadPackage = async (slug) => {
     setSkill(slug); setPackageData(null); setScript(''); setJob(null); setFileFilter('')
@@ -1757,6 +1773,8 @@ function ExecutionConsole({ navigate, notify }) {
       setPackageData(data)
       if (data.groups?.scripts?.length) setScript(data.groups.scripts[0])
       else if (data.groups?.entrypoints?.length) setScript(data.groups.entrypoints[0])
+      const ext = (data.groups?.scripts?.[0] || '').split('.').pop()
+      setRuntime(ext === 'js' || ext === 'mjs' || ext === 'cjs' ? 'node' : ext === 'sh' || ext === 'bash' ? 'bash' : 'python3')
     } catch (error) { notify('error', 'Could not load package', error.message) }
     finally { setLoadingPackage(false) }
   }
@@ -1767,10 +1785,14 @@ function ExecutionConsole({ navigate, notify }) {
     setBusy(true); setJob(null)
     try {
       const created = await post('/api/v1/executions', {
-        skill, arguments: [script, ...tokenizeArgs(args)],
+        skill, team_id: teamId || undefined, command: runtime,
+        arguments: [script, ...tokenizeArgs(args)],
+        timeout_seconds: timeoutSeconds, max_memory_mb: memoryMb,
+        max_cpu_millicores: cpuMillicores, network,
       })
       setJob(created)
       notify('success', 'Execution queued', created.id)
+      setHistoryPage(0); setRefreshKey((value) => value + 1)
     } catch (error) { notify('error', 'Could not start execution', error.message) }
     finally { setBusy(false) }
   }
@@ -1781,6 +1803,7 @@ function ExecutionConsole({ navigate, notify }) {
       const updated = await post(`/api/v1/executions/${job.id}/cancel`, {})
       setJob(updated)
       notify('success', 'Execution canceled', job.id)
+      setRefreshKey((value) => value + 1)
     } catch (error) { notify('error', 'Could not cancel', error.message) }
   }
 
@@ -1792,10 +1815,21 @@ function ExecutionConsole({ navigate, notify }) {
     return () => window.clearInterval(timer)
   }, [job?.id, job?.status])
 
+  useEffect(() => {
+    if (job && ['succeeded', 'failed', 'canceled'].includes(job.status)) {
+      setRefreshKey((value) => value + 1)
+    }
+  }, [job?.status])
+
   const coverage = packageData?.statistics_bundle_coverage || {}
   const files = (packageData?.manifest || []).filter((item) =>
     !fileFilter || item.path.toLowerCase().includes(fileFilter.toLowerCase()))
   const downloadUrl = skill ? `/api/v1/skills/${encodeURIComponent(skill)}/package.zip` : '#'
+  const quota = entitlements.data?.execution_quota || { limit: 0, used: 0, remaining: 0 }
+  const skillNames = Object.fromEntries((skills.data?.items || []).map((item) => [item.id, item.name]))
+  const teams = entitlements.data?.teams || []
+  const historyItems = history.data?.items || []
+  const totalHistory = history.data?.total || 0
 
   return (
     <div>
@@ -1803,8 +1837,13 @@ function ExecutionConsole({ navigate, notify }) {
         <div>
           <div className="section-eyebrow">Execution console</div>
           <h1>Run skill packages safely</h1>
-          <p>Read the complete immutable package, then run its scripts in a temporary, network-isolated container.</p>
+          <p>Read the complete immutable package, then run approved Python, Node.js or shell scripts in a temporary, isolated container.</p>
         </div>
+      </div>
+
+      <div className="metric-grid">
+        <div className="metric-card"><div className="metric-label">Daily quota</div><div className="metric-value">{quota.limit}</div><div className="metric-note">{quota.plan_code || 'plan'} executions</div></div>
+        <div className="metric-card"><div className="metric-label">Used today</div><div className="metric-value">{quota.used}</div><div className="metric-note">{quota.remaining} remaining</div></div>
       </div>
 
       <div className="grid-2">
@@ -1835,9 +1874,24 @@ function ExecutionConsole({ navigate, notify }) {
         </div>
 
         <div className="panel panel-pad">
-          <div className="panel-head"><div><div className="panel-title">2. Run a script</div><div className="panel-sub">Python only. No network. Automatic cleanup.</div></div></div>
+          <div className="panel-head"><div><div className="panel-title">2. Run a script</div><div className="panel-sub">Approved runtimes only. No network unless explicitly enabled.</div></div></div>
           <form onSubmit={run}>
-            <label className="field"><span className="label">Script</span>
+            <div className="field-row">
+              <label className="field"><span className="label">Runtime</span>
+                <select className="select" value={runtime} onChange={(event) => setRuntime(event.target.value)}>
+                  <option value="python3">Python 3</option>
+                  <option value="node">Node.js</option>
+                  <option value="bash">Bash</option>
+                </select>
+              </label>
+              <label className="field"><span className="label">Workspace</span>
+                <select className="select" value={teamId} onChange={(event) => setTeamId(event.target.value)}>
+                  <option value="">Personal</option>
+                  {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <label className="field" style={{ marginTop: 10 }}><span className="label">Script</span>
               <select className="select" value={script} onChange={(event) => setScript(event.target.value)} disabled={!packageData}>
                 <option value="">{packageData ? 'Select a script' : 'Load a skill first'}</option>
                 {(packageData?.groups?.scripts || []).map((path) => <option key={path} value={path}>{path}</option>)}
@@ -1847,6 +1901,12 @@ function ExecutionConsole({ navigate, notify }) {
               <input className="input" value={args} onChange={(event) => setArgs(event.target.value)}
                 placeholder={'SaaS technology landing page --design-system'} disabled={!packageData} />
             </label>
+            <div className="field-row" style={{ marginTop: 10 }}>
+              <label className="field"><span className="label">Timeout (s)</span><input className="input" type="number" min="1" max="600" value={timeoutSeconds} onChange={(event) => setTimeoutSeconds(Number(event.target.value))} /></label>
+              <label className="field"><span className="label">Memory (MB)</span><input className="input" type="number" min="64" max="4096" value={memoryMb} onChange={(event) => setMemoryMb(Number(event.target.value))} /></label>
+              <label className="field"><span className="label">CPU (millicores)</span><input className="input" type="number" min="100" max="4000" step="100" value={cpuMillicores} onChange={(event) => setCpuMillicores(Number(event.target.value))} /></label>
+            </div>
+            <label className="filter-group" style={{ marginTop: 10 }}><input type="checkbox" checked={network} onChange={(event) => setNetwork(event.target.checked)} /> Allow network</label>
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button className="btn btn-primary" disabled={busy || !script}>{busy ? 'Starting…' : 'Run in sandbox'}</button>
               {job && !['succeeded', 'failed', 'canceled'].includes(job.status) && (
@@ -1856,13 +1916,51 @@ function ExecutionConsole({ navigate, notify }) {
           </form>
           {job && (
             <div style={{ marginTop: 16 }}>
-              <div className="status-item"><Activity size={15} /><div><b>{job.status}</b><span>{job.id} · exit {job.exit_code ?? '—'}</span></div></div>
+              <div className="status-item"><Activity size={15} /><div><b>{job.status}</b><span>{job.id} · exit {job.exit_code ?? '—'} · {job.metrics?.duration_ms ?? '—'} ms · {job.metrics?.peak_memory_bytes ? Math.round(job.metrics.peak_memory_bytes / 1024 / 1024) + ' MB' : '—'}</span></div></div>
+              {job.dependencies?.detected && <p className="muted small" style={{ marginTop: 8 }}>Dependencies: {job.dependencies.locked ? 'locked' : 'unlocked'} · {job.dependencies.install_commands?.length || 0} install step(s)</p>}
               {job.stdout && <pre className="code-block console-output">{job.stdout}</pre>}
               {job.stderr && <pre className="code-block console-output">{job.stderr}</pre>}
               {job.error && <div className="banner" style={{ marginTop: 10 }}>{job.error}</div>}
             </div>
           )}
         </div>
+      </div>
+
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <div className="panel-head">
+          <div><div className="panel-title">Execution history</div><div className="panel-sub">Duration, resources, status and errors for every run.</div></div>
+          <select className="select" style={{ maxWidth: 180 }} value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setHistoryPage(0) }}>
+            <option value="">All statuses</option>
+            <option value="succeeded">Succeeded</option>
+            <option value="failed">Failed</option>
+            <option value="canceled">Canceled</option>
+            <option value="running">Running</option>
+            <option value="queued">Queued</option>
+          </select>
+        </div>
+        {history.loading ? <Loading /> : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th>Job</th><th>Skill</th><th>Runtime</th><th>Status</th><th>Duration</th><th>Peak memory</th><th>Exit</th><th>Error</th></tr></thead>
+              <tbody>
+                {historyItems.map((item) => (
+                  <tr key={item.id}>
+                    <td className="mono small">{item.id.slice(0, 8)}</td>
+                    <td>{skillNames[item.skill_id] || item.skill_id.slice(0, 8)}</td>
+                    <td>{item.command}</td>
+                    <td><Pill tone={item.status === 'succeeded' ? 'green' : item.status === 'failed' ? 'red' : 'amber'}>{item.status}</Pill></td>
+                    <td>{item.metrics?.duration_ms ? `${item.metrics.duration_ms} ms` : '—'}</td>
+                    <td>{item.metrics?.peak_memory_bytes ? `${Math.round(item.metrics.peak_memory_bytes / 1024 / 1024)} MB` : '—'}</td>
+                    <td>{item.exit_code ?? '—'}</td>
+                    <td className="muted small">{item.error?.slice(0, 80) || item.stderr?.slice(0, 80) || '—'}</td>
+                  </tr>
+                ))}
+                {historyItems.length === 0 && <tr><td colSpan="8"><p className="muted small">No executions yet.</p></td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {totalHistory > 20 && <div className="market-pagination"><span className="count-note">Page {historyPage + 1} of {Math.ceil(totalHistory / 20)}</span><div><button className="btn btn-outline btn-sm" disabled={historyPage === 0} onClick={() => setHistoryPage(historyPage - 1)}>Previous</button><button className="btn btn-outline btn-sm" disabled={(historyPage + 1) * 20 >= totalHistory} onClick={() => setHistoryPage(historyPage + 1)}>Next</button></div></div>}
       </div>
 
       <div className="panel panel-pad" style={{ marginTop: 18 }}>
