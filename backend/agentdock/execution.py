@@ -14,6 +14,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
 from pathlib import Path, PurePosixPath
@@ -422,6 +423,23 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
     job.completed_at = None
     db.commit()
     stats = {}
+    readings = {"peak_memory": 0, "cpu_total": 0}
+    stop_stats = threading.Event()
+
+    def collect_stats():
+        try:
+            for reading in container.stats(stream=True, decode=True):
+                if stop_stats.is_set():
+                    break
+                memory = (reading.get("memory_stats") or {}).get("usage") or 0
+                cpu = ((reading.get("cpu_stats") or {}).get("cpu_usage") or {}).get("total_usage") or 0
+                readings["peak_memory"] = max(readings["peak_memory"], int(memory))
+                readings["cpu_total"] = max(readings["cpu_total"], int(cpu))
+        except Exception:
+            return
+
+    stats_thread = threading.Thread(target=collect_stats, daemon=True)
+    stats_thread.start()
     try:
         try:
             result = container.wait(timeout=timeout)
@@ -431,6 +449,8 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
                 container.kill()
                 raise ExecutionError(f"Execution timed out after {timeout} seconds")
             raise
+        stop_stats.set()
+        stats_thread.join(timeout=2)
         try:
             stats = container.stats(stream=False) or {}
         except Exception:
@@ -438,8 +458,8 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
         stdout = container.logs(stdout=True, stderr=False).decode("utf-8", "replace")
         stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
         limit = settings.execution_max_output_bytes
-        memory = (stats.get("memory_stats") or {}).get("max_usage") or (stats.get("memory_stats") or {}).get("usage") or 0
-        cpu_total = ((stats.get("cpu_stats") or {}).get("cpu_usage") or {}).get("total_usage") or 0
+        memory = readings["peak_memory"] or (stats.get("memory_stats") or {}).get("max_usage") or (stats.get("memory_stats") or {}).get("usage") or 0
+        cpu_total = readings["cpu_total"] or ((stats.get("cpu_stats") or {}).get("cpu_usage") or {}).get("total_usage") or 0
         return {
             "status": "succeeded" if exit_code == 0 else "failed",
             "exit_code": exit_code, "stdout": stdout[:limit], "stderr": stderr[:limit],
@@ -447,10 +467,13 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
             "duration_ms": int((time.monotonic() - started) * 1000),
             "peak_memory_bytes": int(memory), "cpu_time_ms": int(cpu_total / 1_000_000),
             "resource_stats": {"memory_stats": stats.get("memory_stats", {}),
-                               "cpu_stats": stats.get("cpu_stats", {})},
+                               "cpu_stats": stats.get("cpu_stats", {}),
+                               "peak_memory_bytes": readings["peak_memory"],
+                               "cpu_total_usage": readings["cpu_total"]},
             "dependency_install": bootstrap,
         }
     finally:
+        stop_stats.set()
         try:
             container.remove(force=True)
         except Exception:
