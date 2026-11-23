@@ -27,6 +27,12 @@ function useLoad(fetcher, deps = []) {
   return state
 }
 
+const API_KEY_SCOPES = [
+  'skills:read', 'library:read', 'library:write', 'account:read',
+  'teams:read', 'teams:write', 'marketplace:read', 'marketplace:write',
+  'billing:read', 'execution:run',
+]
+
 const EVENT_LABELS = {
   search_executed: 'Search executed',
   search_failed: 'Search failed',
@@ -1797,15 +1803,24 @@ function IntegrationsPage({ user, navigate, notify }) {
         <div className="panel-head"><div><div className="panel-title">API keys</div><div className="panel-sub">Keys are hashed at rest and can be revoked at any time.</div><div className="panel-sub" style={{ color: '#fbbf24', marginTop: 4 }}>The full key is shown only once, in the banner above, right after creation. If you lose it, revoke the key and create a new one.</div></div></div>
         <form onSubmit={createKey} className="toolbar" style={{ marginBottom: 18 }}>
           <input className="input" style={{ maxWidth: 220 }} value={name} onChange={(event) => setName(event.target.value)} placeholder="Key name" />
-          <select className="select" style={{ maxWidth: 220 }} value={scopes[0]} onChange={(event) => setScopes([event.target.value])}>
-            <option value="skills:read">skills:read</option>
-            <option value="library:read">library:read</option>
-            <option value="account:read">account:read</option>
-            <option value="marketplace:read">marketplace:read</option>
-            <option value="teams:read">teams:read</option>
-          </select>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', maxWidth: 640 }}>
+            {API_KEY_SCOPES.map((scope) => (
+              <label className="filter-group" key={scope} title={scope === 'execution:run' ? 'Required for execute_skill_script' : undefined}>
+                <input
+                  type="checkbox"
+                  checked={scopes.includes(scope)}
+                  onChange={() => setScopes((current) => current.includes(scope)
+                    ? current.filter((item) => item !== scope)
+                    : [...current, scope])}
+                />{' '}{scope}
+              </label>
+            ))}
+          </div>
           <button className="btn btn-primary" disabled={busy}>{busy ? 'Creating…' : 'Create key'}</button>
         </form>
+        <p className="muted small" style={{ marginTop: -8, marginBottom: 14 }}>
+          Tick <code>execution:run</code> to use <code>execute_skill_script</code>. Read-only keys with only <code>skills:read</code> can list and retrieve files but cannot run scripts.
+        </p>
         <div className="activity">
           {(keys.data?.items || []).map((key) => (
             <div className="activity-row" key={key.id}>

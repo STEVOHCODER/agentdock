@@ -40,10 +40,7 @@ dedicated, short-lived Docker container per execution with:
 - minimal environment (no secrets, no customer data)
 - automatic container removal and workspace cleanup
 
-Local workspace reconstruction is also supported: `resolve_skill_package`
-returns the exact manifest and a `workspace_path`, and `retrieve_skill_file`
-returns any file with its verified hash so an agent can rebuild the package
-temporarily without permanent installation.
+Package reads and file retrieval are available for **every approved, security-reviewed skill**. Execution is available for every approved, security-reviewed skill whose snapshot contains Python scripts; a deployment can optionally narrow execution with `AGENTDOCK_EXEC_ALLOWED_SKILLS`. An empty allow-list means all approved, security-reviewed skills are executable.
 
 ## 2. Security design
 

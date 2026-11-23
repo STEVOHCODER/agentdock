@@ -21,6 +21,13 @@ $token.access_token
 
 Store this API key. It is shown once.
 
+For skill script execution, the key must include the `execution:run` scope. Keys created with only `skills:read` can search and retrieve files but cannot call `execute_skill_script`. In the web app, open **Integrations**, tick **execution:run** in the scope list, then create the key. Alternatively:
+
+```powershell
+$scoped = Invoke-RestMethod -Method Post -Uri https://agentdock.link/api/v1/auth/api-keys -ContentType application/json -Headers @{Authorization="Bearer $token"} -Body '{"name":"Agent execution","scopes":["skills:read","execution:run"]}'
+$scoped.api_key
+```
+
 ## 3. Connect MCP
 
 Copy this JSON into your MCP client configuration (Claude, Cursor, Windsurf, OpenCode, etc.):
