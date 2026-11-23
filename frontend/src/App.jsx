@@ -43,7 +43,13 @@ function eventLabel(event) {
 }
 
 function eventDetail(item) {
-  return item.details?.query || item.details?.tool || item.skill_id || 'account event'
+  const detail = item.details?.query || item.details?.tool
+  if (detail) return detail
+  if (item.event?.includes('search')) return 'Search'
+  if (item.event?.includes('mcp')) return 'AgentDock gateway'
+  if (item.event?.includes('discovery')) return 'AgentDock discovery'
+  if (item.event?.includes('retrieved')) return 'Skill retrieved'
+  return item.skill_id || 'gateway event'
 }
 
 function Pill({ children, tone }) {
