@@ -446,24 +446,21 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
         exit_code = None
         canceled = False
         while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
+            if time.monotonic() >= deadline:
                 container.kill()
                 raise ExecutionError(f"Execution timed out after {timeout} seconds")
-            try:
-                result = container.wait(timeout=min(1.0, remaining))
-                exit_code = int(result.get("StatusCode", -1))
+            container.reload()
+            state = container.attrs.get("State") or {}
+            if not state.get("Running", False):
+                exit_code = int(state.get("ExitCode", -1))
                 break
-            except Exception as error:
-                message = str(error).lower()
-                if "timeout" not in message and "timed out" not in message:
-                    raise
             db.refresh(job)
             if job.status == "canceled":
                 container.kill()
                 canceled = True
                 exit_code = 130
                 break
+            time.sleep(0.25)
         stop_stats.set()
         stats_thread.join(timeout=2)
         try:
