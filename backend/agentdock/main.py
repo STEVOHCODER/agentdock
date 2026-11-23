@@ -81,6 +81,17 @@ app = FastAPI(title="AgentDock API", version="0.1.0", description="Curated, on-d
               openapi_url="/api/openapi.json", docs_url="/api/docs", redoc_url=None, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type", "Mcp-Session-Id", "MCP-Protocol-Version"])
+
+
+@app.middleware("http")
+async def cache_control(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 _request_times: dict[str, deque[float]] = defaultdict(deque)
 _auth_request_times: dict[str, deque[float]] = defaultdict(deque)
 _local_limit_calls = 0
