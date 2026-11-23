@@ -1615,16 +1615,21 @@ function BillingPage({ user, plans, navigate, notify }) {
 function UsagePage({ navigate, onSelect }) {
   const usage = useLoad(() => get('/api/v1/account/usage'), [])
   const max = Math.max(1, ...(usage.data?.series || []).map((item) => item.retrievals))
+  const stats = usage.data?.stats || {}
+  const total = usage.data?.skills_retrieved ?? stats.retrievals_success ?? 0
   return (
     <div>
       <div className="page-head">
         <div><div className="section-eyebrow">Usage</div><h1>Retrieval analytics</h1><p>See which skills your agents actually use and where they come from.</p></div>
       </div>
       <div className="metric-grid">
-        <div className="metric-card"><div className="metric-label">Total retrievals</div><div className="metric-value">{usage.data?.skills_retrieved ?? '—'}</div></div>
-        <div className="metric-card"><div className="metric-label">MCP</div><div className="metric-value">{usage.data?.by_source?.mcp ?? 0}</div></div>
+        <div className="metric-card"><div className="metric-label">Total retrievals</div><div className="metric-value">{total}</div></div>
+        <div className="metric-card"><div className="metric-label">MCP</div><div className="metric-value">{usage.data?.by_source?.mcp ?? stats.retrievals_success ?? 0}</div></div>
         <div className="metric-card"><div className="metric-label">REST</div><div className="metric-value">{usage.data?.by_source?.api ?? 0}</div></div>
         <div className="metric-card"><div className="metric-label">Web</div><div className="metric-value">{usage.data?.by_source?.web ?? 0}</div></div>
+        <div className="metric-card"><div className="metric-label">Searches executed</div><div className="metric-value">{stats.searches_executed ?? 0}</div></div>
+        <div className="metric-card"><div className="metric-label">Discovered</div><div className="metric-value">{stats.discovered ?? 0}</div></div>
+        <div className="metric-card"><div className="metric-label">Retrievals failed</div><div className="metric-value">{stats.retrievals_failed ?? 0}</div></div>
       </div>
       <div className="panel panel-pad">
         <div className="panel-head"><div><div className="panel-title">Daily retrievals</div><div className="panel-sub">Last 14 days</div></div></div>
