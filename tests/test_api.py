@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.agentdock import execution, ingest, main, vault
+from backend.agentdock import common, execution, ingest, main, vault
 from backend.agentdock.db import Base
 from backend.agentdock.models import (APIKey, ExecutionJob, ImportBatch, MarketplaceListing, Payment, Repository,
                                       RightsRequest, Skill, SkillVersion, SubscriptionPlan,
@@ -955,3 +955,34 @@ def test_generic_runtimes_and_dependency_detection(clients):
     assert "node" in deps["runtimes"]
     assert any("npm ci" in command for command in deps["install_commands"])
     assert any("left-pad" in package for package in deps["packages"])
+
+
+def test_execution_quota_policy_counts_only_real_runs(clients, monkeypatch):
+    client, _, TestSession = clients
+    monkeypatch.setattr(main.settings, "execution_welcome_bonus", 500)
+    monkeypatch.setattr(main.settings, "execution_welcome_bonus_days", 14)
+    db = TestSession()
+    user = db.scalar(select(User).where(User.email == "member@example.com"))
+    plan = db.get(SubscriptionPlan, "free")
+    if plan is None:
+        plan = SubscriptionPlan(code="free", name="Free", execution_quota=100, sort_order=0)
+        db.add(plan)
+    else:
+        plan.execution_quota = 100
+    db.commit()
+    skill = Skill(slug="qa-quota-skill", name="qa-quota-skill", status="approved", security_status="clear")
+    db.add(skill); db.flush()
+    now = utcnow()
+    for status in ["succeeded", "failed", "canceled", "queued"]:
+        db.add(ExecutionJob(user_id=user.id, skill_id=skill.id, version="git-q", command="python3",
+                            arguments=[], status=status, created_at=now))
+    db.commit(); db.close()
+
+    assert client.post("/api/v1/auth/login", json={
+        "email": "member@example.com", "password": "a-long-member-password-123"}).status_code == 200
+    summary = common.execution_quota_summary(TestSession(), user)
+    assert summary["base_limit"] == 100
+    assert summary["bonus"] == 500
+    assert summary["limit"] == 600
+    assert summary["used"] == 2
+    assert summary["remaining"] == 598

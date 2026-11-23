@@ -441,14 +441,28 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
     stats_thread = threading.Thread(target=collect_stats, daemon=True)
     stats_thread.start()
     try:
-        try:
-            result = container.wait(timeout=timeout)
-            exit_code = int(result.get("StatusCode", -1))
-        except Exception as error:
-            if "timeout" in str(error).lower():
+        deadline = time.monotonic() + timeout
+        exit_code = None
+        canceled = False
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 container.kill()
                 raise ExecutionError(f"Execution timed out after {timeout} seconds")
-            raise
+            try:
+                result = container.wait(timeout=min(1.0, remaining))
+                exit_code = int(result.get("StatusCode", -1))
+                break
+            except Exception as error:
+                message = str(error).lower()
+                if "timeout" not in message and "timed out" not in message:
+                    raise
+            db.refresh(job)
+            if job.status == "canceled":
+                container.kill()
+                canceled = True
+                exit_code = 130
+                break
         stop_stats.set()
         stats_thread.join(timeout=2)
         try:
@@ -461,9 +475,9 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
         memory = readings["peak_memory"] or (stats.get("memory_stats") or {}).get("max_usage") or (stats.get("memory_stats") or {}).get("usage") or 0
         cpu_total = readings["cpu_total"] or ((stats.get("cpu_stats") or {}).get("cpu_usage") or {}).get("total_usage") or 0
         return {
-            "status": "succeeded" if exit_code == 0 else "failed",
+            "status": "canceled" if canceled else ("succeeded" if exit_code == 0 else "failed"),
             "exit_code": exit_code, "stdout": stdout[:limit], "stderr": stderr[:limit],
-            "error": "", "files_verified": 0, "workspace": str(workspace),
+            "error": "Canceled by user" if canceled else "", "files_verified": 0, "workspace": str(workspace),
             "duration_ms": int((time.monotonic() - started) * 1000),
             "peak_memory_bytes": int(memory), "cpu_time_ms": int(cpu_total / 1_000_000),
             "resource_stats": {"memory_stats": stats.get("memory_stats", {}),

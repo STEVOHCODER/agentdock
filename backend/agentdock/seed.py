@@ -21,31 +21,31 @@ logger = logging.getLogger("agentdock.seed")
 PLANS = [
     {
         "code": "free", "name": "Free", "description": "Discover and use the free community catalogue.",
-        "price_cents": 0, "annual_price_cents": 0, "member_limit": 1, "execution_quota": 20, "sort_order": 0,
+        "price_cents": 0, "annual_price_cents": 0, "member_limit": 1, "execution_quota": 100, "sort_order": 0,
         "features": ["Public skill discovery", "Basic skill retrieval", "Basic MCP integration",
                      "Access to free community skills"],
     },
     {
         "code": "developer", "name": "Developer", "description": "A personal workspace with advanced discovery.",
-        "price_cents": 300, "annual_price_cents": 3000, "member_limit": 1, "execution_quota": 100, "sort_order": 1,
+        "price_cents": 300, "annual_price_cents": 3000, "member_limit": 1, "execution_quota": 250, "sort_order": 1,
         "features": ["Everything in Free", "Personal skill collections", "Advanced discovery and filters",
                      "Version preferences", "Personal workspace", "Priority support"],
     },
     {
         "code": "duo", "name": "Duo", "description": "Two seats with shared skills and purchases.",
-        "price_cents": 500, "annual_price_cents": 5000, "member_limit": 2, "execution_quota": 250, "sort_order": 2,
+        "price_cents": 500, "annual_price_cents": 5000, "member_limit": 2, "execution_quota": 500, "sort_order": 2,
         "features": ["Everything in Developer", "Up to 2 members", "Shared skill collections",
                      "Shared purchase history", "Team workspace", "Member management"],
     },
     {
         "code": "team", "name": "Small Team", "description": "Shared expertise for up to four people.",
-        "price_cents": 800, "annual_price_cents": 8000, "member_limit": 4, "execution_quota": 600, "sort_order": 3,
+        "price_cents": 800, "annual_price_cents": 8000, "member_limit": 4, "execution_quota": 1000, "sort_order": 3,
         "features": ["Everything in Duo", "Up to 4 members", "Shared skill collections",
                      "Team workspace", "Shared purchase history", "Member management"],
     },
     {
         "code": "growth", "name": "Growth Team", "description": "A larger shared library with analytics.",
-        "price_cents": 1000, "annual_price_cents": 10000, "member_limit": 7, "execution_quota": 1500, "sort_order": 4,
+        "price_cents": 1000, "annual_price_cents": 10000, "member_limit": 7, "execution_quota": 2500, "sort_order": 4,
         "features": ["Everything in Small Team", "Up to 7 members", "Shared team library",
                      "Team-wide skill management", "Usage analytics and priority support",
                      "Shared premium entitlements where licensed"],

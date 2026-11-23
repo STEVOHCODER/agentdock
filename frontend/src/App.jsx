@@ -1842,8 +1842,8 @@ function ExecutionConsole({ navigate, notify }) {
       </div>
 
       <div className="metric-grid">
-        <div className="metric-card"><div className="metric-label">Daily quota</div><div className="metric-value">{quota.limit}</div><div className="metric-note">{quota.plan_code || 'plan'} executions</div></div>
-        <div className="metric-card"><div className="metric-label">Used today</div><div className="metric-value">{quota.used}</div><div className="metric-note">{quota.remaining} remaining</div></div>
+        <div className="metric-card"><div className="metric-label">Daily quota</div><div className="metric-value">{quota.limit}</div><div className="metric-note">{quota.plan_code || 'plan'} executions{quota.bonus ? ` · +${quota.bonus} welcome` : ''}</div></div>
+        <div className="metric-card"><div className="metric-label">Used today</div><div className="metric-value">{quota.used}</div><div className="metric-note">{quota.remaining} remaining · resets {dateTimeLabel(quota.reset_at)}</div></div>
       </div>
 
       <div className="grid-2">

@@ -74,7 +74,9 @@ class Settings(BaseSettings):
     execution_allow_dependency_network: bool = Field(default=True, validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOW_DEPENDENCY_NETWORK"))
     execution_allow_unlocked_dependencies: bool = Field(default=False, validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOW_UNLOCKED_DEPS"))
     execution_max_timeout_seconds: int = Field(default=600, validation_alias=AliasChoices("AGENTDOCK_EXEC_MAX_TIMEOUT_SECONDS"))
-    execution_default_daily_quota: int = Field(default=20, validation_alias=AliasChoices("AGENTDOCK_EXEC_DEFAULT_DAILY_QUOTA"))
+    execution_default_daily_quota: int = Field(default=100, validation_alias=AliasChoices("AGENTDOCK_EXEC_DEFAULT_DAILY_QUOTA"))
+    execution_welcome_bonus: int = Field(default=500, validation_alias=AliasChoices("AGENTDOCK_EXEC_WELCOME_BONUS"))
+    execution_welcome_bonus_days: int = Field(default=14, validation_alias=AliasChoices("AGENTDOCK_EXEC_WELCOME_BONUS_DAYS"))
 
     # Payments. "manual" is a real invoice workflow: an administrator records the
     # payment before entitlement is granted. Paddle/Flutterwave/UrubutoPay activate

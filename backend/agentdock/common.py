@@ -237,16 +237,32 @@ def entitlement_summary(db: Session, user: User, team_id: str | None = None) -> 
 
 def execution_quota_summary(db: Session, user: User, team_id: str | None = None) -> dict:
     plan, _subscription = user_plan(db, user, team_id)
+    settings = get_settings()
     start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    statement = select(func.count(ExecutionJob.id)).where(ExecutionJob.created_at >= start)
+    reset_at = start + timedelta(days=1)
+    statement = select(func.count(ExecutionJob.id)).where(
+        ExecutionJob.created_at >= start,
+        ExecutionJob.status.in_(["running", "succeeded", "failed"]),
+    )
     if team_id:
         statement = statement.where(ExecutionJob.team_id == team_id)
     else:
         statement = statement.where(ExecutionJob.user_id == user.id, ExecutionJob.team_id.is_(None))
     used = db.scalar(statement) or 0
-    limit = plan.execution_quota or get_settings().execution_default_daily_quota
-    return {"plan_code": plan.code, "limit": limit, "used": used,
-            "remaining": max(0, limit - used), "scope": "team" if team_id else "user"}
+    base_limit = plan.execution_quota or settings.execution_default_daily_quota
+    bonus = 0
+    created = user.created_at
+    if created is not None:
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        bonus = settings.execution_welcome_bonus if created >= utcnow() - timedelta(
+            days=settings.execution_welcome_bonus_days) else 0
+    limit = base_limit + bonus
+    return {
+        "plan_code": plan.code, "base_limit": base_limit, "bonus": bonus, "limit": limit,
+        "used": used, "remaining": max(0, limit - used), "scope": "team" if team_id else "user",
+        "reset_at": reset_at,
+    }
 
 
 def premium_entitlement(db: Session, user: User, skill: Skill) -> bool:
