@@ -88,8 +88,11 @@ def resolve_package(db: Session, identifier: str, version: str | None = None) ->
             "documents": len(groups["entrypoints"]) + len(groups["references"]) + len(groups["other"]),
             "scripts": len(groups["scripts"]),
             "datasets": len(groups["data"]),
-            "complete": bool(groups["scripts"] and groups["data"]),
-            "missing": [] if (groups["scripts"] and groups["data"]) else ["scripts" if not groups["scripts"] else "data"],
+            "complete": bool(manifest),
+            "missing": [] if manifest else ["package files"],
+            "has_scripts": bool(groups["scripts"]),
+            "has_data": bool(groups["data"]),
+            "executable": bool(groups["scripts"]),
         },
     }
 
