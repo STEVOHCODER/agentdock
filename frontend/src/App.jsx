@@ -2213,23 +2213,99 @@ function SettingsPage({ user, route, setUser, notify, onSignOut }) {
 /* ------------------------------------------------------------------ */
 
 function DocsPage({ navigate }) {
+  const steps = [
+    { icon: KeyRound, title: '1. Create a key', body: 'Sign in, verify your email, then create an API key in Integrations. Tick skills:read for access and execution:run to run scripts.' },
+    { icon: Search, title: '2. Discover skills', body: 'Ask your agent to search the reviewed catalogue. Results come from live SkillVault snapshots with licence and security metadata.' },
+    { icon: Terminal, title: '3. Retrieve or execute', body: 'Read complete packages without installing them, or run approved scripts in a temporary, network-isolated sandbox.' },
+  ]
+  const tools = [
+    ['search_skills', 'Find skills by task, category or community.'],
+    ['get_skill', 'Retrieve full instructions and the resource manifest.'],
+    ['resolve_skill_package', 'Resolve the complete immutable package and dependency plan.'],
+    ['retrieve_skill_file', 'Read any exact file with its verified SHA-256.'],
+    ['execute_skill_script', 'Run approved Python, Node or shell scripts in a sandbox.'],
+    ['get_execution_status', 'Poll a queued or running job.'],
+    ['retrieve_execution_result', 'Get stdout, stderr, exit code and resource metrics.'],
+  ]
   return (
-    <main className="legal">
-      <div className="section-eyebrow">Documentation</div>
-      <h1>Build with AgentDock</h1>
-      <p>AgentDock serves reviewed skills over MCP, REST and CLI. This guide covers the fastest path from an empty workspace to a connected agent.</p>
-      <h2>1. Create an account</h2>
-      <p>Register at <code>/register</code>, verify your email, then create an API key in <strong>Integrations</strong>. Keys are scoped, hashed at rest and can be revoked at any time.</p>
-      <h2>2. Connect MCP</h2>
-      <p>Add the endpoint and bearer header to your MCP client configuration:</p>
-      <div className="code-block">{`{\n  "mcpServers": {\n    "agentdock": {\n      "url": "https://your-agentdock.example/mcp",\n      "headers": { "Authorization": "Bearer adk_..." }\n    }\n  }\n}`}</div>
-      <h2>3. Search and retrieve</h2>
-      <p>Agents call <code>search_skills</code>, then <code>get_skill</code> for the full instructions and resource manifest. Premium skills require a purchase or an active plan entitlement.</p>
-      <div className="code-block">{`agentdock search "postgres performance"\nagentdock get postgres-performance --output .agent/skills`}</div>
-      <h2>4. REST endpoints</h2>
-      <p>The interactive OpenAPI reference is available at <code>/api/docs</code> on your deployment. Key routes include <code>/api/v1/skills/search</code>, <code>/api/v1/skills/{'{id}'}/retrieve</code>, <code>/api/v1/marketplace/listings</code> and <code>/api/v1/account/entitlements</code>.</p>
-      <h2>5. Governance</h2>
-      <p>Every skill snapshot is immutable and attributed. Administrators review admission, licences, security scans and rights requests from the control center.</p>
+    <main className="docs-page">
+      <div className="page-head">
+        <div>
+          <div className="section-eyebrow">Documentation</div>
+          <h1>Build with AgentDock</h1>
+          <p>Reviewed skills for your agent. Discover, retrieve and run complete packages through MCP, REST or the CLI — without permanent installation.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => navigate('/developers')}><Terminal size={15} /> Developer reference</button>
+      </div>
+
+      <div className="feature-grid" style={{ marginBottom: 18 }}>
+        {steps.map(({ icon: Icon, title, body }) => (
+          <div className="panel panel-pad" key={title}>
+            <span className="feature-icon" style={{ marginBottom: 12 }}><Icon size={18} /></span>
+            <h3 style={{ fontSize: 16, marginBottom: 8 }}>{title}</h3>
+            <p className="muted small" style={{ lineHeight: 1.7 }}>{body}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid-2">
+        <div className="panel panel-pad">
+          <div className="panel-title" style={{ marginBottom: 10 }}>Connect MCP</div>
+          <p className="muted small">Add this to your MCP client. Replace the key with one from Integrations.</p>
+          <div className="code-block">{`{
+  "mcpServers": {
+    "agentdock": {
+      "url": "https://agentdock.link/mcp",
+      "headers": { "Authorization": "Bearer adk_..." }
+    }
+  }
+}`}</div>
+          <p className="muted small">Required scopes: <code>skills:read</code>. Add <code>execution:run</code> for script execution.</p>
+        </div>
+        <div className="panel panel-pad">
+          <div className="panel-title" style={{ marginBottom: 10 }}>Use the CLI</div>
+          <p className="muted small">The CLI talks to the same gateway as MCP and REST.</p>
+          <div className="code-block">{`agentdock login --url https://agentdock.link
+agentdock search "postgres performance"
+agentdock get postgres-performance
+agentdock connect mcp`}</div>
+          <p className="muted small">Retrieval prints instructions on demand; it does not permanently install a skill.</p>
+        </div>
+      </div>
+
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <div className="panel-title" style={{ marginBottom: 12 }}>Core MCP tools</div>
+        <div className="status-grid">
+          {tools.map(([name, body]) => (
+            <div className="status-item" key={name}><Terminal size={14} /><div><b className="mono">{name}</b><span>{body}</span></div></div>
+          ))}
+        </div>
+        <p className="muted small" style={{ marginTop: 12 }}>Full tool list, input schemas and argument validation are available from <code>tools/list</code>.</p>
+      </div>
+
+      <div className="grid-2" style={{ marginTop: 18 }}>
+        <div className="panel panel-pad">
+          <div className="panel-title" style={{ marginBottom: 10 }}>REST endpoints</div>
+          <p className="muted small">Interactive OpenAPI reference: <code>/api/docs</code>.</p>
+          <div className="code-block">{`GET  /api/v1/skills/search
+POST /api/v1/skills/{id}/retrieve
+GET  /api/v1/skills/{id}/package
+POST /api/v1/executions
+GET  /api/v1/executions
+GET  /api/v1/marketplace/listings
+GET  /api/v1/account/entitlements`}</div>
+        </div>
+        <div className="panel panel-pad">
+          <div className="panel-title" style={{ marginBottom: 10 }}>Governance and quotas</div>
+          <p className="muted small">Every snapshot is immutable, hash-verified and attributed. Administrators review admission, licences, security scans and rights requests in the Control Center.</p>
+          <p className="muted small">Execution is sandboxed, network-off by default and limited by per-job CPU/memory/time settings. Daily quotas come from your active plan.</p>
+          <div className="status-grid" style={{ marginTop: 12 }}>
+            <div className="status-item"><ShieldCheck size={14} /><div><b>Security reviewed</b><span>only clear packages execute</span></div></div>
+            <div className="status-item"><Database size={14} /><div><b>Immutable versions</b><span>pinned by content hash</span></div></div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ marginTop: 28, display: 'flex', gap: 10 }}>
         <button className="btn btn-primary" onClick={() => navigate('/developers')}>Developer reference</button>
         <button className="btn btn-outline" onClick={() => navigate('/register')}>Create a workspace</button>
@@ -2243,27 +2319,49 @@ function DevelopersPage({ navigate }) {
     ['search_skills', 'Find reviewed skills by task, category or community.'],
     ['get_skill', 'Retrieve full instructions and the resource manifest.'],
     ['get_skill_resource', 'Read one file from a pinned snapshot.'],
+    ['resolve_skill_package', 'Resolve the complete immutable package and dependency plan.'],
+    ['list_skill_files', 'List every file with SHA-256 and byte size.'],
+    ['retrieve_skill_file', 'Read any exact file, base64 encoded.'],
+    ['execute_skill_script', 'Run an approved Python, Node or shell script in a sandbox.'],
+    ['get_execution_status', 'Poll a queued or running execution.'],
+    ['retrieve_execution_result', 'Read stdout, stderr, exit code and resource metrics.'],
+    ['cancel_execution', 'Cancel a queued or running execution.'],
     ['list_skill_versions', 'List immutable versions of a skill.'],
     ['browse_marketplace', 'Browse approved free and premium listings.'],
-    ['check_subscription', 'Read the account plan, entitlements and teams.'],
+    ['check_subscription', 'Read the plan, entitlements, teams and quota.'],
     ['save_skill_to_collection', 'Save a skill to a personal collection.'],
   ]
   return (
-    <main className="legal">
-      <div className="section-eyebrow">Developers</div>
-      <h1>One catalogue, three surfaces</h1>
-      <p>MCP for agents, REST for applications, CLI for humans. Authentication is a bearer API key in every case.</p>
-      <h2>MCP tools</h2>
-      <div className="list">
-        {tools.map(([name, body]) => (
-          <div className="list-row" key={name}><span className="activity-icon"><Terminal size={14} /></span><div className="list-row-main"><b className="mono">{name}</b><span>{body}</span></div></div>
-        ))}
+    <main className="docs-page">
+      <div className="page-head">
+        <div>
+          <div className="section-eyebrow">Developers</div>
+          <h1>One catalogue, three surfaces</h1>
+          <p>MCP for agents, REST for applications, CLI for humans. Authentication is a bearer API key in every case.</p>
+        </div>
       </div>
-      <h2>CLI</h2>
-      <div className="code-block">{`pip install agentdock\nagentdock login\nagentdock search "react dashboard"\nagentdock get react-analytics-dashboard --output .agent/skills\nagentdock connect mcp`}</div>
-      <h2>Rate limits and safety</h2>
-      <p>Requests are limited per client and authentication attempts are limited more tightly. Responses set strict cache and content-type headers. Webhooks must present a valid provider or GitHub signature before any entitlement changes.</p>
-      <div style={{ marginTop: 28 }}><button className="btn btn-primary" onClick={() => navigate('/register')}>Get an API key</button></div>
+      <div className="panel panel-pad">
+        <div className="panel-title" style={{ marginBottom: 12 }}>MCP tools</div>
+        <div className="list">
+          {tools.map(([name, body]) => (
+            <div className="list-row" key={name}><span className="activity-icon"><Terminal size={14} /></span><div className="list-row-main"><b className="mono">{name}</b><span>{body}</span></div></div>
+          ))}
+        </div>
+      </div>
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <div className="panel-title" style={{ marginBottom: 10 }}>CLI</div>
+        <div className="code-block">{`pip install agentdock
+agentdock login --url https://agentdock.link
+agentdock search "react dashboard"
+agentdock get react-analytics-dashboard
+agentdock connect mcp`}</div>
+      </div>
+      <div className="panel panel-pad" style={{ marginTop: 18 }}>
+        <div className="panel-title" style={{ marginBottom: 10 }}>Execution and safety</div>
+        <p className="muted small">Execution tools require the <code>execution:run</code> scope. Jobs are network-disabled by default, use per-job CPU/memory/time limits and run in a temporary workspace that is always cleaned up. Daily quotas come from the active plan and team workspace.</p>
+        <p className="muted small">Requests are limited per client and authentication attempts are limited more tightly. Webhooks must present a valid provider or GitHub signature before any entitlement changes.</p>
+      </div>
+      <div style={{ marginTop: 28 }}><button className="btn btn-primary" onClick={() => navigate('/integrations')}>Create an API key</button></div>
     </main>
   )
 }
@@ -3056,13 +3154,28 @@ function MarketplaceV2({ user, navigate, onSelect, notify, embedded }) {
   return (
     <div className="market-v2">
       <section className="market-hero">
-        <div className="market-hero-inner">
-          <span className="market-hero-overline">Marketplace · Real skill licences, premium entitlements, reviews</span>
-          <h1 className="market-hero-title">Skill lines that fit.<br />Build faster with the same tooling the best agents use.<br />Marketplace made by you, reviewed by us.
-          </h1>
-          <div className="market-hero-actions">
-            <button className="btn btn-primary btn-lg" onClick={() => navigate(user ? '/creator' : '/register')}><Star size={16} fill="#fff" /> Publish a skill</button>
-            <button className="btn btn-outline btn-lg" onClick={() => navigate('/docs')}>How it works</button>
+        <div className="market-hero-grid">
+          <div className="market-hero-copy">
+            <span className="market-hero-overline"><Sparkles size={13} /> CURATED SKILL MARKETPLACE</span>
+            <h1 className="market-hero-title">Skills that fit your stack.<br /><span className="accent">Reviewed, versioned, ready to run.</span></h1>
+            <p className="market-hero-sub">Discover complete skill packages from trusted communities. Licences, security scans and immutable snapshots are checked before a listing reaches your agents — read them instantly or run approved scripts in a sandbox.</p>
+            <div className="market-hero-actions">
+              <button className="btn btn-primary btn-lg" onClick={() => navigate(user ? '/creator' : '/register')}><Star size={16} fill="#fff" /> Publish a skill</button>
+              <button className="btn btn-outline btn-lg" onClick={() => navigate('/docs')}>How it works</button>
+            </div>
+          </div>
+          <div className="market-hero-panel">
+            <div className="market-hero-panel-head"><Package size={16} /><span>Marketplace at a glance</span><Pill tone="green">Live</Pill></div>
+            <div className="market-hero-stats">
+              <div><b>{total}</b><span>approved listings</span></div>
+              <div><b>{categories.length}</b><span>categories</span></div>
+            </div>
+            <div className="market-hero-checks">
+              <div><ShieldCheck size={14} /> Licence checked</div>
+              <div><ShieldCheck size={14} /> Security reviewed</div>
+              <div><Database size={14} /> Immutable versions</div>
+              <div><Terminal size={14} /> Sandbox execution</div>
+            </div>
           </div>
         </div>
       </section>
