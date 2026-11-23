@@ -239,6 +239,23 @@ def detect_requirements(manifest: list[dict], snapshot_path: str) -> dict:
     }
 
 
+def chown_workspace(workspace: Path, uid: int | None = None, gid: int | None = None) -> None:
+    if uid is None or gid is None:
+        settings = get_settings()
+        uid = uid if uid is not None else settings.execution_uid
+        gid = gid if gid is not None else settings.execution_gid
+    for root, dirs, files in os.walk(workspace):
+        for name in dirs + files:
+            try:
+                os.chown(os.path.join(root, name), uid, gid)
+            except (PermissionError, OSError):
+                pass
+    try:
+        os.chown(workspace, uid, gid)
+    except (PermissionError, OSError):
+        pass
+
+
 def materialize_workspace(package: dict, workspace: Path) -> int:
     root = workspace / package["workspace_path"]
     root.mkdir(parents=True, exist_ok=True)
@@ -474,6 +491,7 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
         workspace = Path(tempfile.mkdtemp(prefix="job-", dir=str(workspace_root)))
         try:
             files = materialize_workspace(package, workspace)
+            chown_workspace(workspace)
             if progress:
                 progress(f"materialized {files} files")
             argv = [job.command, *job.arguments]

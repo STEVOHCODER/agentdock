@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     execution_driver: str = Field(default="bubblewrap", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_DRIVER"))
     execution_host_workspace_root: str = Field(default="/opt/agentdock/exec-workspaces", validation_alias=AliasChoices("AGENTDOCK_EXEC_HOST_WORKSPACE_ROOT"))
     execution_image: str = Field(default="python:3.13-slim", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_IMAGE"))
+    execution_uid: int = Field(default=10001, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_UID"))
+    execution_gid: int = Field(default=10001, validation_alias=AliasChoices("AGENTDOCK_EXECUTION_GID"))
     execution_runtimes: str = Field(default="python3,python,node,nodejs,bash,sh", validation_alias=AliasChoices("AGENTDOCK_EXECUTION_RUNTIMES"))
     execution_allow_dependency_network: bool = Field(default=True, validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOW_DEPENDENCY_NETWORK"))
     execution_allow_unlocked_dependencies: bool = Field(default=False, validation_alias=AliasChoices("AGENTDOCK_EXEC_ALLOW_UNLOCKED_DEPS"))
