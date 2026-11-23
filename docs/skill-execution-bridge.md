@@ -228,7 +228,7 @@ The executor statically reads `requirements.lock.txt`, `requirements.txt`, `pypr
 
 ## 14. Team-aware MCP and quotas
 
-`execute_skill_script` now accepts `team_id`, `timeout_seconds`, `max_memory_mb`, `max_cpu_millicores` and `network`. Team membership is verified before a job is created. Daily execution quotas come from the active plan (`execution_quota` column): Free 20, Developer 100, Duo 250, Small Team 600, Growth Team 1500. Team jobs count against the team scope; personal jobs count against the user scope. REST `/api/v1/executions` and MCP status/result/cancel calls respect team membership.
+`execute_skill_script` now accepts `team_id`, `timeout_seconds`, `max_memory_mb`, `max_cpu_millicores` and `network`. Team membership is verified before a job is created. Daily execution quotas come from the active plan (`execution_quota` column): Free 100, Developer 250, Duo 500, Small Team 1000, Growth Team 2500. New accounts also receive a 500-execution welcome bonus for their first 14 days. Only jobs that actually enter `running`, `succeeded` or `failed` consume quota; canceled and validation-rejected jobs do not. Team jobs count against the team scope; personal jobs count against the user scope. REST `/api/v1/executions` and MCP status/result/cancel calls respect team membership. Quota usage, bonus and reset time are shown in the Execution console.
 
 ## 15. Execution observability
 
@@ -243,7 +243,28 @@ Every job records duration, peak memory, CPU time and raw Docker stats. `GET /ap
 - Cancellation removes the running container immediately.
 - Admission still blocks unapproved, unlicensed or security-flagged packages.
 
-## 17. Compatibility
+## 17. Additional live validation
+
+A controlled QA skill (`qa-agentdock-execution-probes`) was approved, executed and then withdrawn. Results:
+
+```text
+locked dependency install:  succeeded, requests 2.32.3 installed into /workspace/.deps
+secret probe:               no AgentDock/DB secret names; /app/.env and /opt/agentdock/.env unreadable
+network disabled by default: connection to 1.1.1.1:80 failed
+network enabled per job:     connection to 1.1.1.1:80 succeeded
+timeout:                     failed with "Execution timed out after 3 seconds"
+running cancellation:        canceled in ~2 s, container killed, status stayed canceled
+```
+
+Five concurrent users each performed a search and an execution at the same time:
+
+```text
+search latency:  ~816-821 ms
+execute create:  ~812-814 ms
+job status:      5/5 succeeded
+```
+
+## 18. Compatibility
 
 Existing skill search, retrieval, version listing, resource download, REST
 API, MCP search/get tools and CLI workflows remain unchanged. The new tools
