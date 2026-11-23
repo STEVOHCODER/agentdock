@@ -136,6 +136,21 @@ def test_api_key_is_one_time_and_works_for_mcp(clients):
     assert response.json()["result"]["serverInfo"]["name"] == "agentdock"
     listing = client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     assert "search_skills" in [tool["name"] for tool in listing.json()["result"]["tools"]]
+    search = client.post("/mcp", headers=headers, json={
+        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": {"name": "search_skills", "arguments": {"query": "dashboard"}},
+    })
+    assert "error" not in search.json()
+    failed = client.post("/mcp", headers=headers, json={
+        "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+        "params": {"name": "get_skill", "arguments": {"id": "missing-skill"}},
+    })
+    assert "error" in failed.json()
+    usage = client.get("/api/v1/account/usage").json()["stats"]
+    assert usage["searches_executed"] == 1
+    assert usage["executions"] == 1
+    assert usage["executions_failed"] == 1
+    assert usage["retrievals_failed"] == 1
 
 
 def test_api_key_scopes_limit_library_and_admin_access(clients):
@@ -202,6 +217,13 @@ def test_search_save_retrieve_and_resource_delivery(clients):
     assert resource.status_code == 200
     assert resource.text == "Accessible chart guidance."
     assert client.get("/api/v1/account/usage").json()["skills_retrieved"] == 1
+    assert client.get("/api/v1/skills/search?limit=999").status_code == 422
+    assert client.post("/api/v1/skills/missing-skill/retrieve", json={}).status_code == 404
+    stats = client.get("/api/v1/account/usage").json()["stats"]
+    assert stats["searches_executed"] == 1
+    assert stats["searches_failed"] == 1
+    assert stats["retrievals_success"] == 1
+    assert stats["retrievals_failed"] == 1
 
 
 def test_admin_cannot_override_missing_licence(clients):

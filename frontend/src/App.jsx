@@ -956,7 +956,7 @@ function AppShell({ user, route, plans, adminTab, setAdminTab, isAdmin, mobileOp
 function Dashboard({ user, navigate, onSelectSkill, notify }) {
   const entitlements = useLoad(() => get('/api/v1/account/entitlements'), [])
   const usage = useLoad(() => get('/api/v1/account/usage'), [])
-  const discovery = useLoad(() => get('/api/v1/skills/discovery'), [])
+  const discovery = useLoad(() => get('/api/v1/skills/discovery?track=false'), [])
   const library = useLoad(() => get('/api/v1/user/library'), [])
 
   const recommended = discovery.data?.recommended || []

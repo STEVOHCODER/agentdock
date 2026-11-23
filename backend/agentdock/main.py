@@ -35,6 +35,24 @@ from . import accounts, admin as admin_routes, mailer
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("agentdock")
 settings = get_settings()
+
+
+def request_source(request: Request) -> str:
+    if request.headers.get("x-agentdock-source") == "mcp":
+        return "mcp"
+    if request.headers.get("authorization", "").startswith("Bearer"):
+        return "api"
+    return "web"
+
+
+def record_failure(db: Session, user: User | None, event: str, source: str,
+                   details: dict | None = None) -> None:
+    if user is None:
+        return
+    record_usage(db, user, None, event, source, details=details)
+    db.commit()
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     startup()
@@ -476,32 +494,34 @@ def revoke_key(key_id: str, request: Request, db: Session = Depends(db_session))
 def search_skills(request: Request, q: str = "", category: str | None = None, community: str | None = None,
                  verified: bool | None = None,
                  limit: int = 20, offset: int = 0, db: Session = Depends(db_session)):
-    if not 1 <= limit <= 50 or offset < 0:
-        raise HTTPException(status_code=422, detail="Use limit 1–50 and a non-negative offset")
     user = optional_user(request, db)
-    statement, rank = skill_search_query(db, q, category, community)
-    if verified is True:
-        statement = statement.where(Skill.score >= 75)
-    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
-    order = [rank.desc()] if rank is not None else []
-    rows = db.execute(statement.order_by(*order, Skill.score.desc(), Skill.stars.desc(),
-                                         Skill.updated_at.desc()).offset(offset).limit(limit)).all()
+    source = request_source(request)
+    if not 1 <= limit <= 50 or offset < 0:
+        record_failure(db, user, "search_failed", source, {"reason": "invalid pagination"})
+        raise HTTPException(status_code=422, detail="Use limit 1–50 and a non-negative offset")
+    try:
+        statement, rank = skill_search_query(db, q, category, community)
+        if verified is True:
+            statement = statement.where(Skill.score >= 75)
+        total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
+        order = [rank.desc()] if rank is not None else []
+        rows = db.execute(statement.order_by(*order, Skill.score.desc(), Skill.stars.desc(),
+                                             Skill.updated_at.desc()).offset(offset).limit(limit)).all()
+    except Exception as exc:
+        db.rollback()
+        record_failure(db, user, "search_failed", source, {"error": str(exc)[:200], "query": q[:120]})
+        raise
     if user:
-        db.add(UsageEvent(user_id=user.id, event="search_executed",
-                          source="mcp" if request.headers.get("authorization", "").startswith("Bearer") else "api",
-                          details={"query": q[:120]}))
+        record_usage(db, user, None, "search_executed", source, details={"query": q[:120]})
         db.commit()
     return {"items": [enrich_skill(db, skill, repo) for skill, repo in rows], "total": total,
             "limit": limit, "offset": offset}
 
 
 @app.get("/api/v1/skills/discovery")
-def discover_skills(request: Request, db: Session = Depends(db_session)):
+def discover_skills(request: Request, track: bool = True, db: Session = Depends(db_session)):
     user = optional_user(request, db)
-    if user:
-        db.add(UsageEvent(user_id=user.id, event="discovery_executed",
-                          source="mcp" if request.headers.get("authorization", "").startswith("Bearer") else "api"))
-        db.commit()
+    source = request_source(request)
     approved = Skill.status == "approved"
     def top_skills(*ordering):
         rows = db.execute(select(Skill, Repository).outerjoin(Repository, Skill.repository_id == Repository.id)
@@ -539,7 +559,7 @@ def discover_skills(request: Request, db: Session = Depends(db_session)):
             community_picks.append(skill)
         if len(community_picks) == 4:
             break
-    return {
+    payload = {
         "recommended": top_skills(Skill.score.desc(), Skill.stars.desc(), Skill.updated_at.desc()),
         "popular": popular,
         "recently_updated": top_skills(Skill.updated_at.desc(), Skill.score.desc()),
@@ -547,6 +567,10 @@ def discover_skills(request: Request, db: Session = Depends(db_session)):
         "community_picks": community_picks,
         "trend_window_days": 7,
     }
+    if user and track:
+        record_usage(db, user, None, "discovery_executed", source)
+        db.commit()
+    return payload
 
 
 @app.get("/api/v1/categories")
@@ -573,17 +597,28 @@ def skill_detail(identifier: str, db: Session = Depends(db_session)):
 def retrieve_skill(identifier: str, request: Request, db: Session = Depends(db_session)):
     user = current_user(request, db)
     require_scope(request, "skills:read")
-    skill = get_skill(db, identifier)
-    must_have_license(skill)
-    if skill.is_premium and not premium_entitlement(db, user, skill):
-        raise HTTPException(status_code=402, detail="Purchase this skill to retrieve it")
-    version = get_version(db, skill, None)
+    source = request_source(request)
+    skill = None
     try:
-        instructions = read_resource(version.snapshot_path, "SKILL.md").decode("utf-8", errors="replace")
-    except (ValueError, FileNotFoundError):
-        raise HTTPException(status_code=503, detail="Skill snapshot is unavailable")
-    source = "mcp" if request.headers.get("x-agentdock-source") == "mcp" else "api" if request.headers.get("authorization", "").startswith("Bearer") else "web"
-    db.add(UsageEvent(user_id=user.id, skill_id=skill.id, event="skill.retrieved", source=source))
+        skill = get_skill(db, identifier)
+        must_have_license(skill)
+        if skill.is_premium and not premium_entitlement(db, user, skill):
+            raise HTTPException(status_code=402, detail="Purchase this skill to retrieve it")
+        version = get_version(db, skill, None)
+        try:
+            instructions = read_resource(version.snapshot_path, "SKILL.md").decode("utf-8", errors="replace")
+        except (ValueError, FileNotFoundError):
+            raise HTTPException(status_code=503, detail="Skill snapshot is unavailable")
+    except HTTPException as exc:
+        record_failure(db, user, "retrieve_failed", source,
+                       {"identifier": identifier[:120], "error": str(exc.detail)[:200]})
+        raise
+    except Exception as exc:
+        db.rollback()
+        record_failure(db, user, "retrieve_failed", source,
+                       {"identifier": identifier[:120], "error": str(exc)[:200]})
+        raise
+    record_usage(db, user, skill, "skill.retrieved", source)
     db.commit()
     skill_result = enrich_skill(db, skill, db.get(Repository, skill.repository_id) if skill.repository_id else None)
     skill_result["instructions"] = instructions
@@ -978,8 +1013,6 @@ def audit_logs(request: Request, limit: int = 50, db: Session = Depends(db_sessi
 def mcp_result(request: Request, db: Session, params: dict) -> dict:
     user = current_user(request, db)
     name = params.get("name")
-    db.add(UsageEvent(user_id=user.id, event="mcp_executed", source="mcp", details={"tool": name or ""}))
-    db.commit()
     args = params.get("arguments") or {}
     required_scope = {
         "search_skills": "skills:read", "get_skill": "skills:read",
@@ -998,6 +1031,7 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
         ordering = [rank.desc()] if rank is not None else []
         rows = db.execute(query.order_by(*ordering, Skill.score.desc(), Skill.stars.desc()).limit(8)).all()
         data = [skill_data(skill, repository) for skill, repository in rows]
+        record_usage(db, user, None, "search_executed", "mcp", details={"query": q})
     elif name in {"get_skill", "get_skill_metadata"}:
         skill = get_skill(db, str(args.get("id") or args.get("name") or ""))
         if name == "get_skill":
@@ -1089,8 +1123,9 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
     if name in {"get_skill", "get_skill_resource"}:
         skill_id = str(args.get("id", ""))
         skill = db.scalar(select(Skill).where((Skill.id == skill_id) | (Skill.slug == skill_id)))
-        db.add(UsageEvent(user_id=user.id, skill_id=skill.id if skill else None, event="skill.retrieved", source="mcp"))
-        db.commit()
+        record_usage(db, user, skill, "skill.retrieved", "mcp")
+    record_usage(db, user, None, "mcp_executed", "mcp", details={"tool": name or ""})
+    db.commit()
     import json
     return {"content": [{"type": "text", "text": json.dumps(data, default=str)}], "structuredContent": data}
 
@@ -1138,10 +1173,27 @@ def _mcp_dispatch(request: Request, db: Session, body) -> dict | Response:
         try:
             result = mcp_result(request, db, params)
         except HTTPException as exc:
-            db.add(UsageEvent(user_id=current_user(request, db).id, event="mcp_failed", source="mcp",
-                              details={"tool": params.get("name"), "error": str(exc.detail)[:200]}))
-            db.commit()
+            user = current_user(request, db)
+            tool = params.get("name")
+            details = {"tool": tool, "error": str(exc.detail)[:200]}
+            record_failure(db, user, "mcp_failed", "mcp", details)
+            if tool == "search_skills":
+                record_failure(db, user, "search_failed", "mcp", details)
+            elif tool in {"get_skill", "get_skill_resource"}:
+                record_failure(db, user, "retrieve_failed", "mcp", details)
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": exc.detail}}
+        except Exception:
+            db.rollback()
+            logger.exception("MCP tool call failed")
+            user = current_user(request, db)
+            tool = params.get("name")
+            details = {"tool": tool, "error": "Internal tool error"}
+            record_failure(db, user, "mcp_failed", "mcp", details)
+            if tool == "search_skills":
+                record_failure(db, user, "search_failed", "mcp", details)
+            elif tool in {"get_skill", "get_skill_resource"}:
+                record_failure(db, user, "retrieve_failed", "mcp", details)
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32603, "message": "Internal tool error"}}
     elif method == "ping":
         result = {}
     else:
