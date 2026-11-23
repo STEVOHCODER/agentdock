@@ -163,7 +163,26 @@ confirming that the AgentDock execution delivered the same design system as
 the original complete package. Minor box-drawing padding differences come from
 container log capture, not from content.
 
-## 9. Compatibility
+## 9. Full-catalogue package verification
+
+A controlled sequential verification was run against all live approved skills:
+
+```text
+skills: 86
+packages resolved: 86
+errors: 0
+files retrieved and SHA-256 verified: 3,425
+total bytes verified: 69,305,069 (~69 MB)
+hash mismatches: 0
+skills with executable Python scripts: 21
+docs/asset-only skills: 65
+```
+
+This confirms that complete packages — not just `SKILL.md` — are retrievable
+with exact hash verification for the entire approved catalogue. Docs-only
+skills have no script to run; the other 21 are eligible for isolated execution.
+
+## 10. Compatibility
 
 Existing skill search, retrieval, version listing, resource download, REST
 API, MCP search/get tools and CLI workflows remain unchanged. The new tools
