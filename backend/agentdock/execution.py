@@ -170,9 +170,9 @@ def detect_dependencies(manifest: list[dict], snapshot_path: str) -> dict:
     if has_python:
         req = found.get("requirements.lock.txt") or found.get("requirements.txt")
         if req:
-            install_commands.append(f"pip install --no-cache-dir --target /workspace/.deps -r /workspace/{req}")
+            install_commands.append(f"pip install --no-cache-dir --target /workspace/.deps -r {PurePosixPath(req).name}")
         elif "pyproject.toml" in found:
-            install_commands.append("pip install --no-cache-dir --target /workspace/.deps /workspace")
+            install_commands.append("pip install --no-cache-dir --target /workspace/.deps .")
     if has_node:
         if "package-lock.json" in found:
             install_commands.append("npm ci --ignore-scripts --no-audit --no-fund")
@@ -340,7 +340,7 @@ def _bootstrap_dependencies(client, settings, host_workspace: Path, deps: dict,
         settings.execution_image,
         command=["sh", "-c", " && ".join(commands)],
         volumes={str(host_workspace): {"bind": "/workspace", "mode": "rw"}},
-        working_dir="/workspace",
+        working_dir=f"/workspace/{deps.get('workspace_root', '').strip('/')}".rstrip('/') or "/workspace",
         environment={"HOME": "/tmp", "LANG": "C.UTF-8", "PIP_DISABLE_PIP_VERSION_CHECK": "1",
                      "NPM_CONFIG_CACHE": "/tmp/npm"},
         network_disabled=False,
@@ -395,7 +395,8 @@ def _run_in_docker(job: ExecutionJob, db: Session, workspace: Path, argv: list[s
         if "python" in deps.get("runtimes", []):
             environment["PYTHONPATH"] = "/workspace/.deps"
         if "node" in deps.get("runtimes", []):
-            environment["NODE_PATH"] = "/workspace/node_modules"
+            root = deps.get("workspace_root", "").strip("/")
+            environment["NODE_PATH"] = f"/workspace/{root}/node_modules" if root else "/workspace/node_modules"
     started = time.monotonic()
     container = client.containers.run(
         settings.execution_image,
@@ -515,6 +516,7 @@ def run_job(job_id: str, progress: Callable[[str], None] | None = None) -> dict:
                            settings.execution_max_memory_mb) * 1024 * 1024
         cpu_millicores = min(max(job.max_cpu_millicores or 1000, 100), 4000)
         deps = detect_dependencies(package["manifest"], package["version"].snapshot_path)
+        deps["workspace_root"] = package["workspace_path"]
         job.dependencies = deps
         job.timeout_seconds = timeout
         job.max_memory_mb = memory_bytes // (1024 * 1024)
