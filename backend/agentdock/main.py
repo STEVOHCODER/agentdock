@@ -673,16 +673,24 @@ def skill_versions(identifier: str, db: Session = Depends(db_session)):
 
 
 @app.get("/api/v1/skills/{identifier}/resources")
-def skill_resources(identifier: str, version: str | None = None, db: Session = Depends(db_session)):
+def skill_resources(identifier: str, request: Request, version: str | None = None,
+                    db: Session = Depends(db_session)):
     skill = get_skill(db, identifier)
+    user = optional_user(request, db)
+    if skill.is_premium and (user is None or not premium_entitlement(db, user, skill)):
+        raise HTTPException(status_code=402, detail="Purchase this skill to retrieve it")
     item = get_version(db, skill, version)
     return {"skill_id": skill.id, "version": item.version, "items": item.manifest}
 
 
 @app.get("/api/v1/skills/{identifier}/resources/{resource_path:path}")
-def skill_resource(identifier: str, resource_path: str, version: str | None = None, db: Session = Depends(db_session)):
+def skill_resource(identifier: str, resource_path: str, request: Request, version: str | None = None,
+                   db: Session = Depends(db_session)):
     skill = get_skill(db, identifier)
     must_have_license(skill)
+    user = optional_user(request, db)
+    if skill.is_premium and (user is None or not premium_entitlement(db, user, skill)):
+        raise HTTPException(status_code=402, detail="Purchase this skill to retrieve it")
     item = get_version(db, skill, version)
     try:
         content = read_resource(item.snapshot_path, resource_path)
@@ -718,24 +726,26 @@ def _package_payload(db: Session, package: dict) -> dict:
 @app.get("/api/v1/skills/{identifier}/package")
 def skill_package(identifier: str, request: Request, version: str | None = None,
                   db: Session = Depends(db_session)):
-    current_user(request, db)
+    user = current_user(request, db)
     require_scope(request, "skills:read")
     try:
-        return _package_payload(db, execution_routes.resolve_package(db, identifier, version))
+        return _package_payload(db, execution_routes.resolve_package(db, identifier, version, user))
     except execution_routes.ExecutionError as error:
-        raise HTTPException(status_code=403 if "approved" in str(error) or "allow-list" in str(error) else 404, detail=str(error))
+        message = str(error)
+        status = 402 if "Purchase" in message else 403 if "approved" in message or "allow-list" in message else 404
+        raise HTTPException(status_code=status, detail=message)
 
 
 @app.get("/api/v1/skills/{identifier}/package/requirements")
 def skill_package_requirements(identifier: str, request: Request, version: str | None = None,
                                db: Session = Depends(db_session)):
-    current_user(request, db)
+    user = current_user(request, db)
     require_scope(request, "skills:read")
     try:
-        package = execution_routes.resolve_package(db, identifier, version)
+        package = execution_routes.resolve_package(db, identifier, version, user)
         return execution_routes.detect_requirements(package["manifest"], package["version"].snapshot_path)
     except execution_routes.ExecutionError as error:
-        raise HTTPException(status_code=403, detail=str(error))
+        raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
 
 
 @app.post("/api/v1/executions", status_code=202)
@@ -748,10 +758,10 @@ def create_execution(payload: ExecutionInput, request: Request, db: Session = De
             TeamMember.team_id == payload.team_id, TeamMember.user_id == user.id)):
         raise HTTPException(status_code=403, detail="You are not a member of that team")
     try:
-        package = execution_routes.resolve_package(db, payload.skill, payload.version or None)
+        package = execution_routes.resolve_package(db, payload.skill, payload.version or None, user)
         execution_routes.assert_execution_allowed(package["skill"])
     except execution_routes.ExecutionError as error:
-        raise HTTPException(status_code=403, detail=str(error))
+        raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
     manifest_paths = {entry["path"] for entry in package["manifest"]}
     script = execution_routes.normalize_package_path(package, payload.arguments[0] if payload.arguments else "")
     if not script or script not in manifest_paths:
@@ -1274,16 +1284,16 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
                          "role": member.role if member else None, "seat_limit": team.seat_limit})
     elif name == "resolve_skill_package":
         try:
-            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None, user)
         except execution_routes.ExecutionError as error:
-            raise HTTPException(status_code=403, detail=str(error))
+            raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
         data = _package_payload(db, package)
         data["requirements"] = execution_routes.detect_requirements(package["manifest"], package["version"].snapshot_path)
     elif name == "list_skill_files":
         try:
-            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None, user)
         except execution_routes.ExecutionError as error:
-            raise HTTPException(status_code=403, detail=str(error))
+            raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
         data = {
             "version": package["version"].version,
             "version_hash": package["version"].content_hash,
@@ -1294,9 +1304,9 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
         }
     elif name == "retrieve_skill_file":
         try:
-            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None, user)
         except execution_routes.ExecutionError as error:
-            raise HTTPException(status_code=403, detail=str(error))
+            raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
         path = execution_routes.normalize_package_path(
             package, execution_routes.safe_relative_path(str(args.get("path", ""))))
         try:
@@ -1310,10 +1320,10 @@ def mcp_result(request: Request, db: Session, params: dict) -> dict:
         if not settings.execution_enabled:
             raise HTTPException(status_code=503, detail="Skill execution is disabled on this deployment")
         try:
-            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None)
+            package = execution_routes.resolve_package(db, str(args.get("id", "")), args.get("version") or None, user)
             execution_routes.assert_execution_allowed(package["skill"])
         except execution_routes.ExecutionError as error:
-            raise HTTPException(status_code=403, detail=str(error))
+            raise HTTPException(status_code=402 if "Purchase" in str(error) else 403, detail=str(error))
         script = execution_routes.normalize_package_path(package, str(args.get("script", "")))
         manifest_paths = {entry["path"] for entry in package["manifest"]}
         if not script or script not in manifest_paths:

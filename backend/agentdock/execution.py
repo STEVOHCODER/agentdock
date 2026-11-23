@@ -53,12 +53,14 @@ def assert_execution_allowed(skill: Skill) -> None:
         raise ExecutionError("This skill is not in the execution allow-list")
 
 
-def resolve_package(db: Session, identifier: str, version: str | None = None) -> dict:
-    from .common import get_skill  # local import avoids a module cycle
+def resolve_package(db: Session, identifier: str, version: str | None = None, user=None) -> dict:
+    from .common import get_skill, premium_entitlement  # local import avoids a module cycle
 
     skill = get_skill(db, identifier)
     if skill.status != "approved" or skill.security_status != "clear":
         raise ExecutionError("Only approved, security-reviewed packages can be read")
+    if user is not None and skill.is_premium and not premium_entitlement(db, user, skill):
+        raise ExecutionError("Purchase this skill to retrieve its package")
     item = _version(db, skill, version)
     manifest = sorted(item.manifest or [], key=lambda entry: entry.get("path", ""))
     groups = {"entrypoints": [], "scripts": [], "data": [], "references": [], "assets": [], "other": []}
