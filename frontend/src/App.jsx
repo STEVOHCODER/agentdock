@@ -1731,6 +1731,7 @@ function IntegrationsPage({ user, navigate, notify }) {
       notify('success', 'API key created', 'Copy it now - it will not be shown again.')
       setName('Agent MCP'); setBusy(false)
       setRefreshKeys((value) => value + 1)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) { notify('error', 'Could not create key', error.message); setBusy(false) }
   }
 
@@ -1793,7 +1794,7 @@ function IntegrationsPage({ user, navigate, notify }) {
       </div>
 
       <div className="panel panel-pad" style={{ marginTop: 18 }}>
-        <div className="panel-head"><div><div className="panel-title">API keys</div><div className="panel-sub">Keys are hashed at rest and can be revoked at any time.</div></div></div>
+        <div className="panel-head"><div><div className="panel-title">API keys</div><div className="panel-sub">Keys are hashed at rest and can be revoked at any time.</div><div className="panel-sub" style={{ color: '#fbbf24', marginTop: 4 }}>The full key is shown only once, in the banner above, right after creation. If you lose it, revoke the key and create a new one.</div></div></div>
         <form onSubmit={createKey} className="toolbar" style={{ marginBottom: 18 }}>
           <input className="input" style={{ maxWidth: 220 }} value={name} onChange={(event) => setName(event.target.value)} placeholder="Key name" />
           <select className="select" style={{ maxWidth: 220 }} value={scopes[0]} onChange={(event) => setScopes([event.target.value])}>
