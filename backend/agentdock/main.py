@@ -28,7 +28,7 @@ from .models import (APIKey, AdmissionDecision, AuditLog, Collection, Collection
                      utcnow)
 from .schemas import (APIKeyInput, CollectionInput, DecisionInput, ImportBatchInput, ImportInput,
                       ImportSourceInput, LoginInput, RegisterInput, RepositoryStatusInput, TrustedPublisherInput)
-from .security import admin_user, create_session, current_user, issue_api_key, password_hash, require_scope, verify_password
+from .security import admin_user, create_session, current_user, optional_user, issue_api_key, password_hash, require_scope, verify_password
 from .vault import read_resource
 from . import accounts, admin as admin_routes, mailer
 
@@ -473,11 +473,12 @@ def revoke_key(key_id: str, request: Request, db: Session = Depends(db_session))
 
 @app.get("/api/v1/skills")
 @app.get("/api/v1/skills/search")
-def search_skills(q: str = "", category: str | None = None, community: str | None = None,
+def search_skills(request: Request, q: str = "", category: str | None = None, community: str | None = None,
                  verified: bool | None = None,
                  limit: int = 20, offset: int = 0, db: Session = Depends(db_session)):
     if not 1 <= limit <= 50 or offset < 0:
         raise HTTPException(status_code=422, detail="Use limit 1–50 and a non-negative offset")
+    user = optional_user(request, db)
     statement, rank = skill_search_query(db, q, category, community)
     if verified is True:
         statement = statement.where(Skill.score >= 75)
@@ -485,12 +486,20 @@ def search_skills(q: str = "", category: str | None = None, community: str | Non
     order = [rank.desc()] if rank is not None else []
     rows = db.execute(statement.order_by(*order, Skill.score.desc(), Skill.stars.desc(),
                                          Skill.updated_at.desc()).offset(offset).limit(limit)).all()
+    if user:
+        db.add(UsageEvent(user_id=user.id, event="search_executed",
+                          source="mcp" if request.headers.get("authorization", "").startswith("Bearer") else "api",
+                          details={"query": q[:120]}))
     return {"items": [enrich_skill(db, skill, repo) for skill, repo in rows], "total": total,
             "limit": limit, "offset": offset}
 
 
 @app.get("/api/v1/skills/discovery")
-def discover_skills(db: Session = Depends(db_session)):
+def discover_skills(request: Request, db: Session = Depends(db_session)):
+    user = optional_user(request, db)
+    if user:
+        db.add(UsageEvent(user_id=user.id, event="discovery_executed",
+                          source="mcp" if request.headers.get("authorization", "").startswith("Bearer") else "api"))
     approved = Skill.status == "approved"
     def top_skills(*ordering):
         rows = db.execute(select(Skill, Repository).outerjoin(Repository, Skill.repository_id == Repository.id)
@@ -714,8 +723,21 @@ def usage(request: Request, db: Session = Depends(db_session)):
         key = str(created_at.date())
         if key in series:
             series[key] += 1
+    def event_count(event):
+        return db.scalar(select(func.count(UsageEvent.id)).where(
+            UsageEvent.user_id == user.id, UsageEvent.event == event)) or 0
+    stats = {
+        "searches_executed": event_count("search_executed"),
+        "searches_failed": event_count("search_failed"),
+        "discovered": event_count("discovery_executed"),
+        "discovered_failed": event_count("discovery_failed"),
+        "retrievals_success": total,
+        "retrievals_failed": event_count("retrieve_failed"),
+        "executions": event_count("mcp_executed"),
+        "executions_failed": event_count("mcp_failed"),
+    }
     return {"skills_retrieved": total, "plan": summary["plan_name"],
-            "plan_code": summary["plan_code"], "entitlements": summary,
+            "plan_code": summary["plan_code"], "entitlements": summary, "stats": stats,
             "by_source": by_source,
             "series": [{"date": key, "retrievals": value} for key, value in series.items()],
             "items": [{"event": event.event, "skill_id": event.skill_id,
@@ -954,6 +976,7 @@ def audit_logs(request: Request, limit: int = 50, db: Session = Depends(db_sessi
 def mcp_result(request: Request, db: Session, params: dict) -> dict:
     user = current_user(request, db)
     name = params.get("name")
+    db.add(UsageEvent(user_id=user.id, event="mcp_executed", source="mcp", details={"tool": name or ""}))
     args = params.get("arguments") or {}
     required_scope = {
         "search_skills": "skills:read", "get_skill": "skills:read",
@@ -1112,6 +1135,9 @@ def _mcp_dispatch(request: Request, db: Session, body) -> dict | Response:
         try:
             result = mcp_result(request, db, params)
         except HTTPException as exc:
+            db.add(UsageEvent(user_id=current_user(request, db).id, event="mcp_failed", source="mcp",
+                              details={"tool": params.get("name"), "error": str(exc.detail)[:200]}))
+            db.commit()
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": exc.detail}}
     elif method == "ping":
         result = {}

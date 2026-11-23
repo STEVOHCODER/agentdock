@@ -976,9 +976,16 @@ function Dashboard({ user, navigate, onSelectSkill, notify }) {
         </div>
       </div>
 
-      <div className="metric-grid">
+      <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(8, minmax(0,1fr))' }}>
         <div className="metric-card"><div className="metric-label"><CircleDollarSign size={14} /> Current plan</div><div className="metric-value">{entitlements.data?.plan_name || 'Free'}</div><div className="metric-note">{entitlements.data?.plan_code || 'free'}</div></div>
-        <div className="metric-card"><div className="metric-label"><Zap size={14} /> Skills retrieved</div><div className="metric-value">{usage.data?.skills_retrieved ?? '—'}</div><div className="metric-note">{usage.data?.by_source?.mcp ? `${usage.data.by_source.mcp} via MCP` : 'across all surfaces'}</div></div>
+        <div className="metric-card"><div className="metric-label"><Search size={14} /> Searches executed</div><div className="metric-value">{usage.data?.stats?.searches_executed ?? '—'}</div><div className="metric-note">successful</div></div>
+        <div className="metric-card"><div className="metric-label"><X size={14} /> Searches failed</div><div className="metric-value">{usage.data?.stats?.searches_failed ?? '—'}</div><div className="metric-note">failed</div></div>
+        <div className="metric-card"><div className="metric-label"><BookOpen size={14} /> Discovered</div><div className="metric-value">{usage.data?.stats?.discovered ?? '—'}</div><div className="metric-note">discovery runs</div></div>
+        <div className="metric-card"><div className="metric-label"><X size={14} /> Discovery failed</div><div className="metric-value">{usage.data?.stats?.discovered_failed ?? '—'}</div><div className="metric-note">failed</div></div>
+        <div className="metric-card"><div className="metric-label"><Zap size={14} /> Skills retrieved</div><div className="metric-value">{usage.data?.skills_retrieved ?? '—'}</div><div className="metric-note">successful</div></div>
+        <div className="metric-card"><div className="metric-label"><X size={14} /> Retrievals failed</div><div className="metric-value">{usage.data?.stats?.retrievals_failed ?? '—'}</div><div className="metric-note">failed</div></div>
+        <div className="metric-card"><div className="metric-label"><Cpu size={14} /> Executed</div><div className="metric-value">{usage.data?.stats?.executions ?? '—'}</div><div className="metric-note">successful</div></div>
+        <div className="metric-card"><div className="metric-label"><X size={14} /> Executed failed</div><div className="metric-value">{usage.data?.stats?.executions_failed ?? '—'}</div><div className="metric-note">failed</div></div>
         <div className="metric-card"><div className="metric-label"><Library size={14} /> Saved skills</div><div className="metric-value">{library.data?.items?.length ?? '—'}</div><div className="metric-note">in your library</div></div>
         <div className="metric-card"><div className="metric-label"><Users size={14} /> Teams</div><div className="metric-value">{entitlements.data?.teams?.length ?? 0}</div><div className="metric-note">{entitlements.data?.teams?.length ? 'shared workspaces' : 'invite your team'}</div></div>
       </div>
